@@ -43,6 +43,8 @@ Without the CLI, a migration can also be pasted into the Supabase SQL editor. Th
 | `scenarios` | The test cases, per feature and role, with origin (`ai`, `edited`, `manual`) and the team's result (`verdict`, `marked_by`, `marked_at`) | Step 2 |
 | `sync_features` | Every feature as each finished sync left it: what the sync did to it, and its frozen counts | Step 2 |
 | `feature_views` | Which sync's New or Changed mark each person has cleared, per feature | Step 2 |
+| `sessions` | One per signed-in browser: the SHA-256 of the cookie's token, the person, when it expires (30 days) | Step 3 |
+| `provider_tokens` | Each person's GitHub access and refresh tokens, sealed with AES-256-GCM, and when they expire | Step 3 |
 
 ### How the API's ideas map to the tables
 
@@ -53,3 +55,4 @@ Without the CLI, a migration can also be pasted into the Supabase SQL editor. Th
 - **New or Changed** for a person: the current sync's `sync_features.change` for that feature, unless that person's `feature_views` row points at the current sync. Opening a feature upserts that row.
 - **Regenerating** deletes one role's `origin = 'ai'` scenarios of a feature and inserts new ones. `edited` and `manual` ones stay, with their results. It becomes a Postgres function with its endpoint in step 5. Finishing a sync becomes one in step 6.
 - **Order**: lists sort scenarios by `seq`, the order they were written in.
+- **Secrets at rest**: a session token is stored only as its hash, and provider tokens only sealed. Someone who reads the tables can neither sign in as anyone nor call GitHub as them. Selecting from `users` never brings tokens with it.

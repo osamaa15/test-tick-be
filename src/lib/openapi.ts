@@ -4,6 +4,14 @@ import { z } from 'zod'
 /** Each feature's routes file registers its paths here, next to the route itself. */
 export const registry = new OpenAPIRegistry()
 
+/** For a route's `security`: it needs the session cookie. Swagger sends it once you have signed in on this host. */
+export const sessionCookie = registry.registerComponent('securitySchemes', 'session', {
+  type: 'apiKey',
+  in: 'cookie',
+  name: 'testick_session',
+  description: 'Sign in first: open /api/auth/github in this browser, then come back to the docs.',
+})
+
 const ErrorBody = z
   .object({
     error: z.object({
@@ -15,6 +23,7 @@ const ErrorBody = z
 
 const errorDescriptions = {
   400: 'The request is not valid. `issues` says which fields are wrong.',
+  401: 'Not signed in, or the session has expired.',
   404: 'Not found, or not yours to see.',
   429: 'Too many requests. The `RateLimit` header says when to try again.',
 } as const

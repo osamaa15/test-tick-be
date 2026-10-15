@@ -4,10 +4,16 @@ const Env = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(4000),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
-  CORS_ORIGIN: z.url().default('http://localhost:5173'),
+  FRONTEND_URL: z.url().default('http://localhost:5173'),
+  API_URL: z.url().default('http://localhost:4000'),
   TRUST_PROXY: z.coerce.number().int().min(0).default(0),
   SUPABASE_URL: z.url(),
   SUPABASE_SECRET_KEY: z.string().min(1),
+  GITHUB_CLIENT_ID: z.string().min(1),
+  GITHUB_CLIENT_SECRET: z.string().min(1),
+  TOKEN_ENCRYPTION_KEY: z
+    .string()
+    .refine((key) => Buffer.from(key, 'base64').length === 32, 'Must be 32 random bytes in base64. See .env.example.'),
 })
 
 // Fail at startup, not on the first request that needs a missing value. What each one means is in .env.example.

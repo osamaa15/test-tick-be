@@ -1,19 +1,8 @@
 import assert from 'node:assert/strict'
-import { once } from 'node:events'
-import type { AddressInfo } from 'node:net'
-import { after, test } from 'node:test'
+import { test } from 'node:test'
+import { startTestServer } from './testServer.js'
 
-// config.ts reads these on import, so they are set before the app loads. Nothing here reaches the database.
-process.env.NODE_ENV = 'test'
-process.env.LOG_LEVEL = 'silent'
-process.env.SUPABASE_URL = 'http://localhost:54321'
-process.env.SUPABASE_SECRET_KEY = 'test'
-
-const { createApp } = await import('./app.js')
-const server = createApp().listen(0)
-await once(server, 'listening')
-const base = `http://localhost:${(server.address() as AddressInfo).port}`
-after(() => server.close())
+const base = await startTestServer()
 
 const postContact = (body: string) =>
   fetch(`${base}/api/contact`, { method: 'POST', headers: { 'content-type': 'application/json' }, body })

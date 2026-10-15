@@ -1,3 +1,4 @@
+import cookieParser from 'cookie-parser'
 import cors from 'cors'
 import express from 'express'
 import helmet from 'helmet'
@@ -5,6 +6,7 @@ import { pinoHttp } from 'pino-http'
 import swaggerUi from 'swagger-ui-express'
 import { z } from 'zod'
 import { config } from './config.js'
+import { authRouter } from './features/auth/routes.js'
 import { contactRouter } from './features/contact/routes.js'
 import { handleErrors, notFound } from './lib/errors.js'
 import { logger } from './lib/logger.js'
@@ -29,15 +31,16 @@ export function createApp() {
 
   app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => req.url === '/health' } }))
   app.use(helmet())
-  app.use(cors({ origin: config.CORS_ORIGIN, credentials: true }))
+  app.use(cors({ origin: config.FRONTEND_URL, credentials: true }))
   app.use(express.json({ limit: '100kb' }))
+  app.use(cookieParser())
 
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok' })
   })
 
   // Generous: the frontend polls every 3 seconds while a sync runs. Busy public routes add their own, lower limit.
-  app.use('/api', limitRequests(1000, 15), contactRouter)
+  app.use('/api', limitRequests(1000, 15), authRouter, contactRouter)
 
   if (config.NODE_ENV !== 'production') {
     const document = openApiDocument()

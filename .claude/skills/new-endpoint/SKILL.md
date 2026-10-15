@@ -51,6 +51,7 @@ scenariosRouter.patch('/scenarios/:scenarioId', async (req, res) => {
 })
 ```
 
+- Behind sign-in (every route except contact, health and sign-in itself): the handler's first line is `const { user } = await requireSession(req)` from `../auth/session.js`, and the registration adds `security: [{ [sessionCookie.name]: [] }]` and `401` to `errorResponses`. Check the session before parsing the body, so a stranger gets 401, not 400.
 - The handler parses, calls the service, and answers. Nothing else. No try/catch: Express 5 forwards the rejection to `handleErrors`.
 - Status codes: 200 for a read or change, 201 for a created thing, 204 with `res.status(204).end()` for nothing to return.
 - A public route, or one that writes, costs money (AI) or sends something, adds its own `limitRequests(limit, minutes)` before the handler, and says so in the `description`.
@@ -58,7 +59,9 @@ scenariosRouter.patch('/scenarios/:scenarioId', async (req, res) => {
 
 ## 5. Test: `src/features/<name>/<name>.test.ts`, or extend `src/app.test.ts`
 
-- At least: a wrong body is a 400 that names the field, and a missing thing is a 404. These need no database.
+- Start the app with `const base = await startTestServer()` from `src/testServer.ts`. It fakes the config, so nothing reaches the real database or GitHub.
+- At least: no session is a 401, and a wrong body is a 400 that names the field. These need no database.
+- What needs the database (a 404, the shape of a real answer) is checked by hand against the linked project, as the `check` skill says, with any rows it made deleted afterwards.
 - Logic with branches (who is a Lead, what regenerate keeps) gets a test of its own on the service's pure parts.
 - Then the `check` skill.
 
