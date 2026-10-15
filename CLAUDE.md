@@ -4,12 +4,15 @@ The API behind the Testick frontend (`../frontend`). Testick connects to a team'
 
 ## Status
 
-Built: step 1, the foundation. Express 5 + TypeScript, config checked at startup, security headers, CORS, rate limits, request logs, one error format, Swagger, graceful shutdown, tests, and `POST /api/contact` (stored, not emailed yet).
+Built:
+
+- Step 1, the foundation. Express 5 + TypeScript, config checked at startup, security headers, CORS, rate limits, request logs, one error format, Swagger, graceful shutdown, tests, and `POST /api/contact` (stored, not emailed yet).
+- Step 2, the database: `users`, `projects`, `syncs`, `features`, `scenarios` (with the team's result), `sync_features` (history) and `feature_views` (New or Changed marks), pushed to the linked Supabase project. How they map to the API is in `docs/database.md`. Postgres functions for regenerating and finishing a sync come with their endpoints.
 
 Roadmap, one step at a time:
 
 1. ~~Foundation and contact~~
-2. Database tables for users, projects, features, scenarios, results and syncs
+2. ~~Database tables for users, projects, features, scenarios, results and syncs~~
 3. Sign in with GitHub and session cookies: `/api/session`, `/api/auth/*`, `/api/me`
 4. Projects and repositories, read from the provider
 5. Scenarios: read a feature, mark results, add, edit, regenerate

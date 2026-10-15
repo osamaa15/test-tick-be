@@ -36,5 +36,20 @@ Without the CLI, a migration can also be pasted into the Supabase SQL editor. Th
 | Table | Holds | Since |
 | --- | --- | --- |
 | `contact_messages` | Messages from the public contact page: name, email, topic, message | Step 1 |
+| `users` | One per person and provider account: name, handle, avatar, their own `role` (null until chosen) | Step 2 |
+| `projects` | Connected repositories: provider id, owner, name, visibility, default branch, who connected it | Step 2 |
+| `syncs` | Every run that read a push: status, branch, commit, `failure` (only when failed), start and finish | Step 2 |
+| `features` | What syncs found in a project: name and one-sentence description | Step 2 |
+| `scenarios` | The test cases, per feature and role, with origin (`ai`, `edited`, `manual`) and the team's result (`verdict`, `marked_by`, `marked_at`) | Step 2 |
+| `sync_features` | Every feature as each finished sync left it: what the sync did to it, and its frozen counts | Step 2 |
+| `feature_views` | Which sync's New or Changed mark each person has cleared, per feature | Step 2 |
 
-The tables for users, projects, features, scenarios, results and syncs come in step 2.
+### How the API's ideas map to the tables
+
+- **Lead and visibility** are not stored. Both come from the provider on each request: who can access the repository, and with what permission.
+- **The current sync** is the project's newest `succeeded` sync. `latestSync` is its newest sync of any status. A unique index allows only one `running` sync per project.
+- **The result** is three columns on `scenarios`, one per scenario for the whole team. A check keeps `verdict` and `marked_at` set or cleared together. A sync that finds a feature changed clears them.
+- **Counts** (`total`, `passed`, `failed` per role) are added up from `scenarios` for the current sync. When the next sync finishes, the previous current sync's `sync_features.scenarios` is filled with the counts as they stood, as `{"tester": {...}, "developer": {...}}`. It stays null while that sync is current.
+- **New or Changed** for a person: the current sync's `sync_features.change` for that feature, unless that person's `feature_views` row points at the current sync. Opening a feature upserts that row.
+- **Regenerating** deletes one role's `origin = 'ai'` scenarios of a feature and inserts new ones. `edited` and `manual` ones stay, with their results. It becomes a Postgres function with its endpoint in step 5. Finishing a sync becomes one in step 6.
+- **Order**: lists sort scenarios by `seq`, the order they were written in.

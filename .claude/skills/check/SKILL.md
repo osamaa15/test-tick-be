@@ -18,6 +18,8 @@ From `backend/`:
 
    Expect `{"status":"ok"}` and `200`. Use the real `.env` instead of the placeholder values only to try an endpoint that needs the database.
 
+   Run the built `node dist/server.js`, not `tsx`: tsx starts a child process that `kill $PID` misses, and it keeps the port. Afterwards, `curl -s -m 2 localhost:4123/health` must fail.
+
 - Fix the cause. Never silence a failure with `any`, `@ts-ignore`, a disabled lint rule, a skipped test or a loosened check.
 - A new route that is missing from `/api/openapi.json`, or has no test for its error answers, is unfinished.
 - Report what ran and what passed. Say plainly what could not be checked, such as a query that needs a linked Supabase project.
