@@ -1,0 +1,12 @@
+node_modules
+dist
+*.log
+
+# Secrets. Only .env.example is committed.
+.env
+.env.*
+!.env.example
+
+# Supabase CLI local state
+supabase/.branches
+supabase/.temp
