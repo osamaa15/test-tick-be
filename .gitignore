@@ -10,3 +10,6 @@ dist
 # Supabase CLI local state
 supabase/.branches
 supabase/.temp
+
+# GitHub App private keys
+*.pem
