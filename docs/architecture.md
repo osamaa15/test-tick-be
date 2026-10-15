@@ -14,7 +14,7 @@ How a request moves through the backend, what keeps it safe, and what has to cha
 | 4 | `cors` | Only `FRONTEND_URL` may call from a browser, with cookies (`credentials: true`). |
 | 5 | `express.json({ limit: '100kb' })` | Parses JSON bodies. A bigger body is a 413, and broken JSON a 400, before any handler runs. |
 | 5b | `cookie-parser` | Fills `req.cookies`, where the session and sign-in state cookies are read. |
-| 6 | `GET /health` | Before the rate limit, so uptime checks are never refused. It never touches the database, so a database outage does not make the host restart a healthy server. |
+| 6 | `GET /` and `GET /health` | `/` says the API is live (and links the docs outside production); `/health` is for uptime checks. Before the rate limit, so they are never refused. Neither touches the database, so a database outage does not make the host restart a healthy server. |
 | 7 | `/api` + `limitRequests(1000, 15)` | One limit for the whole API, per caller. Routes add stricter ones. |
 | 8 | Feature routers | Each validates its input, calls its service, and answers. |
 | 9 | Swagger, outside production | `/api/docs` (the page) and `/api/openapi.json` (the document, for Postman or generating code). |

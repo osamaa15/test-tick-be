@@ -15,6 +15,12 @@ test('health answers ok with security headers', async () => {
   assert.equal(res.headers.get('x-powered-by'), null)
 })
 
+test('the root address says the API is live and links the docs', async () => {
+  const res = await fetch(`${base}/`)
+  assert.equal(res.status, 200)
+  assert.deepEqual(await res.json(), { message: 'Testick API is live.', docs: '/api/docs' })
+})
+
 test('an unknown route is a JSON 404', async () => {
   const res = await fetch(`${base}/api/nope`)
   assert.equal(res.status, 404)

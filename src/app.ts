@@ -15,6 +15,20 @@ import { limitRequests } from './lib/rateLimit.js'
 
 registry.registerPath({
   method: 'get',
+  path: '/',
+  tags: ['health'],
+  summary: 'Says the API is live',
+  description: 'For people opening the address in a browser. Links the docs outside production.',
+  responses: {
+    200: {
+      description: 'Live.',
+      content: { 'application/json': { schema: z.object({ message: z.string(), docs: z.string().optional() }) } },
+    },
+  },
+})
+
+registry.registerPath({
+  method: 'get',
   path: '/health',
   tags: ['health'],
   summary: 'Whether the server is up',
@@ -44,6 +58,10 @@ export function createApp() {
   app.use(cors({ origin: config.FRONTEND_URL, credentials: true }))
   app.use(express.json({ limit: '100kb' }))
   app.use(cookieParser())
+
+  app.get('/', (_req, res) => {
+    res.json({ message: 'Testick API is live.', ...(config.NODE_ENV !== 'production' && { docs: '/api/docs' }) })
+  })
 
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok' })
