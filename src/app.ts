@@ -29,7 +29,17 @@ export function createApp() {
   const app = express()
   app.set('trust proxy', config.TRUST_PROXY)
 
-  app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => req.url === '/health' } }))
+  app.use(
+    pinoHttp({
+      logger,
+      autoLogging: { ignore: (req) => req.url === '/health' },
+      // Short entries without headers or query strings: a query can carry a one-time sign-in code.
+      serializers: {
+        req: (req) => ({ id: req.id, method: req.method, url: String(req.url).split('?')[0] }),
+        res: (res) => ({ statusCode: res.statusCode }),
+      },
+    }),
+  )
   app.use(helmet())
   app.use(cors({ origin: config.FRONTEND_URL, credentials: true }))
   app.use(express.json({ limit: '100kb' }))

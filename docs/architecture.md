@@ -9,7 +9,7 @@ How a request moves through the backend, what keeps it safe, and what has to cha
 | Step | What | Why here |
 | --- | --- | --- |
 | 1 | `trust proxy` = `TRUST_PROXY` | So `req.ip` is the caller, not the load balancer. The rate limiter keys on it. |
-| 2 | `pino-http` | Logs every request (except `/health`) with an id, status and time. Cookie and authorization headers are redacted. |
+| 2 | `pino-http` | Logs one entry per request (except `/health`): id, method, path, status and time. No headers and no query string, which can carry a one-time sign-in code. |
 | 3 | `helmet` | Security headers on every answer, errors included: no `X-Powered-By`, `nosniff`, a strict Content-Security-Policy, HSTS and more. |
 | 4 | `cors` | Only `FRONTEND_URL` may call from a browser, with cookies (`credentials: true`). |
 | 5 | `express.json({ limit: '100kb' })` | Parses JSON bodies. A bigger body is a 413, and broken JSON a 400, before any handler runs. |
@@ -45,7 +45,7 @@ The frontend turns a 404 into `NotFoundError` and any other failure into `Error`
 - **Headers**: helmet's defaults. Swagger UI works with them because it loads its scripts as files.
 - **CORS**: one allowed origin, `FRONTEND_URL`. No wildcard, because the API uses cookies.
 - **Rate limits**: per IP address. `/api` allows 1000 requests per 15 minutes (the frontend polls every 3 seconds while a sync runs). `POST /api/contact` allows 5 an hour. Sign-in (`/api/auth/github` and its callback together) allows 20 per 15 minutes. Answers carry the `RateLimit` and `RateLimit-Policy` headers (IETF draft 8).
-- **Secrets**: only in `.env` (git-ignored), read only by `config.ts`, which stops the server at startup when one is missing or wrong. Logs redact cookies and authorization headers.
+- **Secrets**: only in `.env` (git-ignored), read only by `config.ts`, which stops the server at startup when one is missing or wrong. Request logs carry no headers or query strings, and the logger also redacts cookie and authorization headers anywhere they appear.
 - **Database**: the server uses the Supabase secret key and checks access itself. Row level security is on for every table with no policies, so the public `anon` key can read nothing. See `docs/database.md`.
 - **Errors**: a 500 never sends its message or stack to the caller.
 - **Swagger**: served only when `NODE_ENV` is not `production`.
