@@ -108,24 +108,30 @@ export type Database = {
       }
       features: {
         Row: {
+          code_hash: string | null
           created_at: string
           description: string
           id: string
           name: string
+          paths: string[]
           project_id: string
         }
         Insert: {
+          code_hash?: string | null
           created_at?: string
           description: string
           id?: string
           name: string
+          paths?: string[]
           project_id: string
         }
         Update: {
+          code_hash?: string | null
           created_at?: string
           description?: string
           id?: string
           name?: string
+          paths?: string[]
           project_id?: string
         }
         Relationships: [
@@ -148,6 +154,7 @@ export type Database = {
           owner: string
           provider: string
           provider_repo_id: string
+          resync: boolean
           visibility: string
         }
         Insert: {
@@ -159,6 +166,7 @@ export type Database = {
           owner: string
           provider: string
           provider_repo_id: string
+          resync?: boolean
           visibility: string
         }
         Update: {
@@ -170,6 +178,7 @@ export type Database = {
           owner?: string
           provider?: string
           provider_repo_id?: string
+          resync?: boolean
           visibility?: string
         }
         Relationships: [
@@ -350,7 +359,9 @@ export type Database = {
       }
       syncs: {
         Row: {
+          attempts: number
           branch: string
+          claimed_at: string | null
           commit_author: string | null
           commit_message: string | null
           commit_sha: string | null
@@ -362,7 +373,9 @@ export type Database = {
           status: string
         }
         Insert: {
+          attempts?: number
           branch: string
+          claimed_at?: string | null
           commit_author?: string | null
           commit_message?: string | null
           commit_sha?: string | null
@@ -374,7 +387,9 @@ export type Database = {
           status?: string
         }
         Update: {
+          attempts?: number
           branch?: string
+          claimed_at?: string | null
           commit_author?: string | null
           commit_message?: string | null
           commit_sha?: string | null
@@ -433,9 +448,36 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      claim_sync: {
+        Args: never
+        Returns: {
+          attempts: number
+          branch: string
+          claimed_at: string | null
+          commit_author: string | null
+          commit_message: string | null
+          commit_sha: string | null
+          failure: string | null
+          finished_at: string | null
+          id: string
+          project_id: string
+          started_at: string
+          status: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "syncs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       connect_projects: {
         Args: { p_repos: Json; p_user_id: string }
         Returns: undefined
+      }
+      fail_sync: {
+        Args: { p_attempt: number; p_failure: string; p_sync_id: string }
+        Returns: boolean
       }
       feature_summaries: {
         Args: { p_project_ids: string[]; p_user_id: string }
@@ -452,6 +494,10 @@ export type Database = {
           tester_passed: number
           tester_total: number
         }[]
+      }
+      finish_sync: {
+        Args: { p_attempt: number; p_features: Json; p_sync_id: string }
+        Returns: boolean
       }
       open_feature: {
         Args: { p_feature_id: string; p_user_id: string }
@@ -473,6 +519,33 @@ export type Database = {
           tester_failed: number
           tester_passed: number
           tester_total: number
+        }[]
+      }
+      replace_ai_scenarios: {
+        Args: { p_feature_id: string; p_role: string; p_scenarios: Json }
+        Returns: undefined
+      }
+      request_sync: {
+        Args: { p_branch: string; p_project_id: string }
+        Returns: undefined
+      }
+      start_requested_sync: {
+        Args: { p_project_id: string }
+        Returns: undefined
+      }
+      sync_history: {
+        Args: { p_project_id: string }
+        Returns: {
+          branch: string
+          commit_author: string
+          commit_message: string
+          commit_sha: string
+          failure: string
+          features: Json
+          id: string
+          is_current: boolean
+          started_at: string
+          status: string
         }[]
       }
     }

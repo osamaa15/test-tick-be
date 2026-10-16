@@ -1,7 +1,7 @@
 import type { Database } from '../../lib/database.types.js'
 import { HttpError } from '../../lib/errors.js'
 import { supabase } from '../../lib/supabase.js'
-import { accessibleRepositories, type AccessibleRepository } from './repositories.js'
+import { accessibleRepositories, repositoryOfProject, type AccessibleRepository } from './repositories.js'
 import { FeatureChange, SyncStatus, type Project, type ProjectDetail, type Repository } from './schemas.js'
 
 type Functions = Database['public']['Functions']
@@ -51,16 +51,9 @@ export async function listProjects(userId: string): Promise<Project[]> {
 
 /** One project with its features, or 404 when it does not exist or the person cannot access its repository. */
 export async function getProject(userId: string, projectId: string): Promise<ProjectDetail> {
-  const [{ data: row, error }, repositories] = await Promise.all([
-    supabase.from('projects').select('provider_repo_id').eq('id', projectId).maybeSingle(),
-    accessibleRepositories(userId),
-  ])
-  if (error) throw error
-  // Not connected, or not theirs to see: the same answer, so nothing leaks.
-  if (!row || !repositories.has(row.provider_repo_id)) throw new HttpError(404, 'Not found.')
-
+  const repository = await repositoryOfProject(userId, projectId)
   const [[project], features] = await Promise.all([
-    projectsFor(userId, repositories, [row.provider_repo_id]),
+    projectsFor(userId, new Map([[repository.id, repository]]), [repository.id]),
     supabase.rpc('feature_summaries', { p_user_id: userId, p_project_ids: [projectId] }),
   ])
   if (!project) throw new HttpError(404, 'Not found.')

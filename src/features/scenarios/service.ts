@@ -1,5 +1,6 @@
 import type { Tables, TablesUpdate } from '../../lib/database.types.js'
 import { HttpError } from '../../lib/errors.js'
+import { installationToken, readFiles } from '../../lib/githubApp.js'
 import { supabase } from '../../lib/supabase.js'
 import { Role } from '../auth/schemas.js'
 import { accessibleRepositories } from '../projects/repositories.js'
@@ -12,6 +13,7 @@ import {
   type Scenario,
   type ScenarioInput,
 } from './schemas.js'
+import { writeScenarios } from './writer.js'
 
 const SCENARIO = '*, marker:users!marked_by(id, name)'
 type ScenarioRow = Tables<'scenarios'> & { marker: { id: string; name: string } | null }
@@ -53,7 +55,7 @@ async function findFeature(userId: string, featureId: string) {
   const [{ data: feature, error }, repositories] = await Promise.all([
     supabase
       .from('features')
-      .select('id, name, description, project_id, project:projects!inner(provider_repo_id)')
+      .select('id, name, description, paths, project_id, project:projects!inner(provider_repo_id)')
       .eq('id', featureId)
       .maybeSingle(),
     accessibleRepositories(userId),
@@ -123,6 +125,42 @@ export async function setResult(userId: string, scenarioId: string, verdict: Ver
 export async function editScenario(userId: string, scenarioId: string, input: ScenarioInput): Promise<Scenario> {
   const { origin } = await findScenario(userId, scenarioId)
   return saveScenario(scenarioId, { ...cleanInput(input), origin: origin === 'ai' ? 'edited' : origin })
+}
+
+/**
+ * Has Claude rewrite one role's AI scenarios from the feature's code at the current sync, and returns that role's
+ * scenarios afterwards. Edited and hand-written ones stay as they are, with their results.
+ */
+export async function regenerateScenarios(userId: string, featureId: string, role: Role): Promise<Scenario[]> {
+  const { feature, repository } = await findFeature(userId, featureId)
+  const [current, kept] = await Promise.all([
+    supabase
+      .from('syncs')
+      .select('commit_sha')
+      .eq('project_id', feature.project_id)
+      .eq('status', 'succeeded')
+      .order('started_at', { ascending: false })
+      .limit(1)
+      .single(),
+    supabase.from('scenarios').select('title').eq('feature_id', featureId).eq('role', role).neq('origin', 'ai'),
+  ])
+  if (current.error) throw current.error
+  if (kept.error) throw kept.error
+
+  const { owner, name, id } = repository
+  const token = await installationToken(owner, name, id)
+  const files = current.data.commit_sha ? await readFiles(token, owner, name, current.data.commit_sha, feature.paths) : []
+  const written = await writeScenarios(feature, files, [role], kept.data.map((scenario) => scenario.title))
+
+  const replaced = await supabase.rpc('replace_ai_scenarios', {
+    p_feature_id: featureId,
+    p_role: role,
+    p_scenarios: written.map(({ role: _role, ...scenario }) => scenario),
+  })
+  if (replaced.error) throw replaced.error
+  const { data, error } = await supabase.from('scenarios').select(SCENARIO).eq('feature_id', featureId).eq('role', role).order('seq')
+  if (error) throw error
+  return data.map(toScenario)
 }
 
 /** Adds a person's own scenario to one role's view of a feature. */

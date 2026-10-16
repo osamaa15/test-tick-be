@@ -10,6 +10,7 @@ import { authRouter } from './features/auth/routes.js'
 import { contactRouter } from './features/contact/routes.js'
 import { projectsRouter } from './features/projects/routes.js'
 import { scenariosRouter } from './features/scenarios/routes.js'
+import { syncsRouter, webhooksRouter } from './features/syncs/routes.js'
 import { handleErrors, notFound } from './lib/errors.js'
 import { logger } from './lib/logger.js'
 import { openApiDocument, registry } from './lib/openapi.js'
@@ -58,6 +59,8 @@ export function createApp() {
   )
   app.use(helmet())
   app.use(cors({ origin: config.FRONTEND_URL, credentials: true }))
+  // Before the JSON parser, which would consume the body whose signature the webhook checks.
+  app.use('/api/webhooks', limitRequests(1000, 15), webhooksRouter)
   app.use(express.json({ limit: '100kb' }))
   app.use(cookieParser())
 
@@ -70,7 +73,7 @@ export function createApp() {
   })
 
   // Generous: the frontend polls every 3 seconds while a sync runs. Busy public routes add their own, lower limit.
-  app.use('/api', limitRequests(1000, 15), authRouter, contactRouter, projectsRouter, scenariosRouter)
+  app.use('/api', limitRequests(1000, 15), authRouter, contactRouter, projectsRouter, scenariosRouter, syncsRouter)
 
   if (config.NODE_ENV !== 'production') {
     const document = openApiDocument()

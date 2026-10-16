@@ -34,7 +34,7 @@ export const ScenarioSummary = z
   .object({ total: z.number().int(), passed: z.number().int(), failed: z.number().int() })
   .meta({ id: 'ScenarioSummary' })
 
-const ScenariosByRole = z
+export const ScenariosByRole = z
   .object({ tester: ScenarioSummary, developer: ScenarioSummary })
   .meta({ description: "Counts per role, because each role sees its own scenarios. Results are the team's." })
 
@@ -59,6 +59,7 @@ export const ProjectRef = z
   .meta({ id: 'ProjectRef', description: 'What pages about one project carry: its name, and whether the person leads it.' })
 
 export const FeatureChange = z.enum(['added', 'changed']).meta({ id: 'FeatureChange' })
+export type FeatureChange = z.infer<typeof FeatureChange>
 
 export const FeatureSummary = z
   .object({

@@ -37,9 +37,9 @@ Without the CLI, a migration can also be pasted into the Supabase SQL editor. Th
 | --- | --- | --- |
 | `contact_messages` | Messages from the public contact page: name, email, topic, message | Step 1 |
 | `users` | One per person and provider account: name, handle, avatar, their own `role` (null until chosen) | Step 2 |
-| `projects` | Connected repositories: provider id, owner, name, visibility, default branch, who connected it | Step 2 |
-| `syncs` | Every run that read a push: status, branch, commit, `failure` (only when failed), start and finish | Step 2 |
-| `features` | What syncs found in a project: name and one-sentence description | Step 2 |
+| `projects` | Connected repositories: provider id, owner, name, visibility, default branch, who connected it, and `resync` (a push came while a sync ran; step 6) | Step 2 |
+| `syncs` | Every run that read a push: status, branch, commit, `failure` (only when failed), start and finish. Also the job queue: `claimed_at` and `attempts` (step 6) | Step 2 |
+| `features` | What syncs found in a project: name, one-sentence description, and (step 6) the `paths` that implement it with a `code_hash` of their contents, to tell when it changed | Step 2 |
 | `scenarios` | The test cases, per feature and role, with origin (`ai`, `edited`, `manual`) and the team's result (`verdict`, `marked_by`, `marked_at`) | Step 2 |
 | `sync_features` | Every feature as each finished sync left it: what the sync did to it, and its frozen counts | Step 2 |
 | `feature_views` | Which sync's New or Changed mark each person has cleared, per feature | Step 2 |
@@ -56,6 +56,13 @@ Called with `supabase.rpc(...)`. Each takes the person (`p_user_id`) and, where 
 | `project_summaries(p_user_id, p_repo_ids)` | Each connected project among these repositories: its newest sync, its feature and new-feature counts, and its counts per role (its features' added up). Most recently synced first | Every projects route | Step 4 |
 | `connect_projects(p_user_id, p_repos)` | Makes the projects and each one's first `running` sync together. An existing project is left alone, and gets a sync only if it has none | `POST /api/projects` | Step 4 |
 | `open_feature(p_user_id, p_feature_id)` | Returns the feature's New or Changed mark for this person as it was, and clears it (records them as having seen it at the current sync) | `GET /api/projects/:projectId/features/:featureId` | Step 5 |
+| `claim_sync()` | Takes the oldest running sync nobody holds (or whose claim is over 5 minutes old) and counts the attempt | The sync worker | Step 6 |
+| `request_sync(p_project_id, p_branch)` | Starts a sync, or sets `resync` when one is running | `POST /api/webhooks/github` | Step 6 |
+| `finish_sync(p_sync_id, p_attempt, p_features)` | Ends a sync that worked, all together (see Syncs in `docs/architecture.md`). False when the worker lost its claim | The sync worker | Step 6 |
+| `fail_sync(p_sync_id, p_attempt, p_failure)` | Ends a sync that could not finish, changing nothing else | The sync worker | Step 6 |
+| `start_requested_sync(p_project_id)` | Starts the sync a push asked for while one ran | `finish_sync`, `fail_sync` | Step 6 |
+| `replace_ai_scenarios(p_feature_id, p_role, p_scenarios)` | Replaces one role's `ai` scenarios of a feature | `POST /api/features/:featureId/regenerate` | Step 6 |
+| `sync_history(p_project_id)` | Every sync, newest first, with its features as it left them: live counts for the current sync, frozen ones for older syncs | `GET /api/projects/:projectId/syncs` | Step 6 |
 
 ### How the API's ideas map to the tables
 
@@ -66,7 +73,7 @@ Called with `supabase.rpc(...)`. Each takes the person (`p_user_id`) and, where 
 - **The result** is three columns on `scenarios`, one per scenario for the whole team. A check keeps `verdict` and `marked_at` set or cleared together. A sync that finds a feature changed clears them.
 - **Counts** (`total`, `passed`, `failed` per role) are added up from `scenarios` for the current sync. When the next sync finishes, the previous current sync's `sync_features.scenarios` is filled with the counts as they stood, as `{"tester": {...}, "developer": {...}}`. It stays null while that sync is current.
 - **New or Changed** for a person: the current sync's `sync_features.change` for that feature, unless that person's `feature_views` row points at the current sync. Opening a feature upserts that row.
-- **Regenerating** deletes one role's `origin = 'ai'` scenarios of a feature and inserts new ones. `edited` and `manual` ones stay, with their results. It becomes a Postgres function with its endpoint in step 6, beside the AI that writes the new ones. Finishing a sync becomes one in step 6 too.
+- **Regenerating** deletes one role's `origin = 'ai'` scenarios of a feature and inserts new ones. `edited` and `manual` ones stay, with their results. That is `replace_ai_scenarios`. A sync that finds a feature changed does the same for both roles inside `finish_sync`, and clears every result of that feature.
 - **Editing** an `ai` scenario turns it `edited` and keeps its result. A result is set or cleared with `verdict`, `marked_by` and `marked_at` together; `marked_by` is the person who marked it.
 - **Order**: lists sort scenarios by `seq`, the order they were written in.
 - **Secrets at rest**: a session token is stored only as its hash, and provider tokens only sealed. Someone who reads the tables can neither sign in as anyone nor call GitHub as them. Selecting from `users` never brings tokens with it.

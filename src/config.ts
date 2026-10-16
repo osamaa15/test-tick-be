@@ -1,4 +1,14 @@
+import { createPrivateKey } from 'node:crypto'
 import { z } from 'zod'
+
+const isPrivateKey = (base64: string) => {
+  try {
+    createPrivateKey(Buffer.from(base64, 'base64').toString('utf8'))
+    return true
+  } catch {
+    return false
+  }
+}
 
 const Env = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -11,6 +21,12 @@ const Env = z.object({
   SUPABASE_SECRET_KEY: z.string().min(1),
   GITHUB_CLIENT_ID: z.string().min(1),
   GITHUB_CLIENT_SECRET: z.string().min(1),
+  GITHUB_APP_ID: z.coerce.number().int().positive(),
+  GITHUB_APP_PRIVATE_KEY: z
+    .string()
+    .refine(isPrivateKey, "Must be the GitHub App's private key (.pem), base64-encoded on one line. See .env.example."),
+  GITHUB_WEBHOOK_SECRET: z.string().min(20, 'Must be at least 20 random characters. See .env.example.'),
+  ANTHROPIC_API_KEY: z.string().min(1),
   TOKEN_ENCRYPTION_KEY: z
     .string()
     .refine((key) => Buffer.from(key, 'base64').length === 32, 'Must be 32 random bytes in base64. See .env.example.'),

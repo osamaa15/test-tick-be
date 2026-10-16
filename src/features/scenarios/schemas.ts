@@ -55,6 +55,8 @@ export type ScenarioInput = z.infer<typeof ScenarioInput>
 
 export const NewScenario = ScenarioInput.extend({ role: Role }).meta({ id: 'NewScenario' })
 
+export const RegenerateInput = z.object({ role: Role }).meta({ id: 'RegenerateInput' })
+
 export const ResultInput = z
   .object({ verdict: Verdict.nullable().meta({ description: 'Null clears the result.' }) })
   .meta({ id: 'ResultInput' })

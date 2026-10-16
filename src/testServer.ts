@@ -1,3 +1,4 @@
+import { generateKeyPairSync } from 'node:crypto'
 import { once } from 'node:events'
 import type { AddressInfo } from 'node:net'
 import { after } from 'node:test'
@@ -11,6 +12,12 @@ Object.assign(process.env, {
   SUPABASE_SECRET_KEY: 'test',
   GITHUB_CLIENT_ID: 'test-client-id',
   GITHUB_CLIENT_SECRET: 'test',
+  GITHUB_APP_ID: '1',
+  GITHUB_APP_PRIVATE_KEY: Buffer.from(
+    generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey.export({ type: 'pkcs8', format: 'pem' }),
+  ).toString('base64'),
+  GITHUB_WEBHOOK_SECRET: 'test-webhook-secret-0123456789',
+  ANTHROPIC_API_KEY: 'test',
   TOKEN_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
 })
 

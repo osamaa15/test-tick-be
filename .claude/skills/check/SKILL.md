@@ -13,10 +13,10 @@ From `backend/`:
 2. If the change touched startup, middleware, Swagger or the build, also run the compiled app once, inside one foreground command that stops it:
 
    ```sh
-   npm run build && (NODE_ENV=development LOG_LEVEL=warn SUPABASE_URL=http://localhost:54321 SUPABASE_SECRET_KEY=x GITHUB_CLIENT_ID=x GITHUB_CLIENT_SECRET=x TOKEN_ENCRYPTION_KEY=$(node -e "process.stdout.write(Buffer.alloc(32).toString('base64'))") PORT=4123 node dist/server.js & PID=$!; sleep 2; curl -s localhost:4123/health; curl -s -o /dev/null -w "%{http_code}\n" localhost:4123/api/docs/; kill $PID)
+   npm run build && (NODE_ENV=development LOG_LEVEL=warn SUPABASE_URL=http://localhost:54321 SUPABASE_SECRET_KEY=x GITHUB_CLIENT_ID=x GITHUB_CLIENT_SECRET=x GITHUB_APP_ID=1 GITHUB_APP_PRIVATE_KEY=$(node -e "process.stdout.write(Buffer.from(require('crypto').generateKeyPairSync('rsa',{modulusLength:2048}).privateKey.export({type:'pkcs8',format:'pem'})).toString('base64'))") GITHUB_WEBHOOK_SECRET=xxxxxxxxxxxxxxxxxxxxxxxx ANTHROPIC_API_KEY=x TOKEN_ENCRYPTION_KEY=$(node -e "process.stdout.write(Buffer.alloc(32).toString('base64'))") PORT=4123 node dist/server.js & PID=$!; sleep 2; curl -s localhost:4123/health; curl -s -o /dev/null -w "%{http_code}\n" localhost:4123/api/docs/; kill $PID)
    ```
 
-   Expect `{"status":"ok"}` and `200`. Use the real `.env` instead of the placeholder values only to try an endpoint that needs the database.
+   Expect `{"status":"ok"}` and `200`. With placeholders the sync worker logs that it cannot reach the database; that is expected. Use the real `.env` only to try an endpoint that needs the database: the worker is then real too, and runs any sync that is waiting.
 
    Run the built `node dist/server.js`, not `tsx`: tsx starts a child process that `kill $PID` misses, and it keeps the port. Afterwards, `curl -s -m 2 localhost:4123/health` must fail.
 

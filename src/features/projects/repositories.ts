@@ -1,5 +1,7 @@
 import { z } from 'zod'
+import { HttpError } from '../../lib/errors.js'
 import { gitHubGet } from '../../lib/github.js'
+import { supabase } from '../../lib/supabase.js'
 import { asGitHubUser } from '../auth/tokens.js'
 import type { Repository } from './schemas.js'
 
@@ -83,4 +85,16 @@ export function accessibleRepositories(userId: string, { fresh = false } = {}) {
     if (cache.get(userId)?.repositories === repositories) cache.delete(userId)
   })
   return repositories
+}
+
+/** The repository of a project the person can access, or a 404: the same answer as for a project that does not exist. */
+export async function repositoryOfProject(userId: string, projectId: string): Promise<AccessibleRepository> {
+  const [{ data: project, error }, repositories] = await Promise.all([
+    supabase.from('projects').select('provider_repo_id').eq('id', projectId).maybeSingle(),
+    accessibleRepositories(userId),
+  ])
+  if (error) throw error
+  const repository = project && repositories.get(project.provider_repo_id)
+  if (!repository) throw new HttpError(404, 'Not found.')
+  return repository
 }

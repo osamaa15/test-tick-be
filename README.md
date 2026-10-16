@@ -4,7 +4,7 @@ The API for the Testick frontend: Express 5, TypeScript and Supabase. It answers
 
 ## Run it
 
-Needs Node 22.9 or newer, a Supabase project and a GitHub App (callback URL `http://localhost:4000/api/auth/github/callback`, repository permission Contents: read-only), installed on the accounts whose repositories you want to connect. Only those repositories are listed.
+Needs Node 22.9 or newer, a Supabase project and a GitHub App (callback URL `http://localhost:4000/api/auth/github/callback`, repository permission Contents: read-only), installed on the accounts whose repositories you want to connect. Only those repositories are listed. Syncs also need the app's **App ID** and a **private key**, a **webhook** (below), and a **Claude API key** from console.anthropic.com. `.env.example` says where each value comes from.
 
 ```sh
 npm install
@@ -16,6 +16,21 @@ npm run dev               # http://localhost:4000
 ```
 
 Try the API in Swagger at **http://localhost:4000/api/docs**. For routes behind sign-in, first open http://localhost:4000/api/auth/github in the same browser; the session cookie then goes with Swagger's requests. The raw OpenAPI document is at `/api/openapi.json`, for Postman or code generation. Both are off in production.
+
+## Webhooks
+
+A push starts a sync through the app's webhook. On the GitHub App's page:
+
+1. **General > Webhook**: tick **Active**. **Webhook URL** is `API_URL` + `/api/webhooks/github`; **Webhook secret** is `GITHUB_WEBHOOK_SECRET` from `.env`.
+2. **Permissions & events > Subscribe to events**: tick **Push**.
+
+GitHub cannot reach `localhost`, so locally the webhook goes through a relay: open https://smee.io/new, use its address as the Webhook URL, and keep this running in a second terminal while you work:
+
+```sh
+npx smee-client --url https://smee.io/<your-channel> --target http://localhost:4000/api/webhooks/github
+```
+
+Connecting a repository starts its first sync without any webhook.
 
 ## Commands
 

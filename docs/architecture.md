@@ -12,6 +12,7 @@ How a request moves through the backend, what keeps it safe, and what has to cha
 | 2 | `pino-http` | Logs one entry per request (except `/health`): id, method, path, status and time. No headers and no query string, which can carry a one-time sign-in code. |
 | 3 | `helmet` | Security headers on every answer, errors included: no `X-Powered-By`, `nosniff`, a strict Content-Security-Policy, HSTS and more. |
 | 4 | `cors` | Only `FRONTEND_URL` may call from a browser, with cookies (`credentials: true`). |
+| 4b | `/api/webhooks` + `limitRequests(1000, 15)` | GitHub's webhooks, before the JSON parser: their signature is checked over the body exactly as sent (`express.raw`, 1 MB). |
 | 5 | `express.json({ limit: '100kb' })` | Parses JSON bodies. A bigger body is a 413, and broken JSON a 400, before any handler runs. |
 | 5b | `cookie-parser` | Fills `req.cookies`, where the session and sign-in state cookies are read. |
 | 6 | `GET /` and `GET /health` | `/` says the API is live (and links the docs outside production); `/health` is for uptime checks. Before the rate limit, so they are never refused. Neither touches the database, so a database outage does not make the host restart a healthy server. |
@@ -44,7 +45,7 @@ The frontend turns a 404 into `NotFoundError` and any other failure into `Error`
 - **Input**: every body, param and query is parsed with Zod at the handler. Strings are trimmed and have a maximum length. The database repeats the most important limits as `check` constraints.
 - **Headers**: helmet's defaults. Swagger UI works with them because it loads its scripts as files.
 - **CORS**: one allowed origin, `FRONTEND_URL`. No wildcard, because the API uses cookies.
-- **Rate limits**: per IP address. `/api` allows 1000 requests per 15 minutes (the frontend polls every 3 seconds while a sync runs). `POST /api/contact` allows 5 an hour. Sign-in (`/api/auth/github` and its callback together) allows 20 per 15 minutes. `GET /api/repositories` (asks GitHub every time) allows 60 per 15 minutes, and connecting (`POST /api/projects`) 30. Changes to scenarios (marking a result, adding, editing) share one count of 300 per 15 minutes. Answers carry the `RateLimit` and `RateLimit-Policy` headers (IETF draft 8).
+- **Rate limits**: per IP address. `/api` allows 1000 requests per 15 minutes (the frontend polls every 3 seconds while a sync runs). `POST /api/contact` allows 5 an hour. Sign-in (`/api/auth/github` and its callback together) allows 20 per 15 minutes. `GET /api/repositories` (asks GitHub every time) allows 60 per 15 minutes, and connecting (`POST /api/projects`) 30. Changes to scenarios (marking a result, adding, editing) share one count of 300 per 15 minutes. Regenerating (Claude, costs money) allows 20 an hour. Webhooks allow 1000 per 15 minutes. Answers carry the `RateLimit` and `RateLimit-Policy` headers (IETF draft 8).
 - **Secrets**: only in `.env` (git-ignored), read only by `config.ts`, which stops the server at startup when one is missing or wrong. Request logs carry no headers or query strings, and the logger also redacts cookie and authorization headers anywhere they appear.
 - **Database**: the server uses the Supabase secret key and checks access itself. Row level security is on for every table with no policies, so the public `anon` key can read nothing. See `docs/database.md`.
 - **Errors**: a 500 never sends its message or stack to the caller.
@@ -65,6 +66,24 @@ The frontend turns a 404 into `NotFoundError` and any other failure into `Error`
 
 Not built yet: revoking the GitHub token on disconnect (planned in Settings).
 
+### Webhooks
+
+GitHub signs every delivery with `GITHUB_WEBHOOK_SECRET` (HMAC-SHA256 in `X-Hub-Signature-256`). An unsigned or wrongly signed body is a 401, checked in constant time before the body is parsed. A push to a connected repository's default branch calls `request_sync`; every other event is answered 202 and ignored.
+
+## Syncs
+
+A sync reads one push and leaves the project's features and scenarios as the code now is.
+
+1. **Queue.** The `syncs` table is the queue: a `running` sync is a job. Connecting a repository (`connect_projects`) and a push (`request_sync`) insert one. A push while one runs sets `projects.resync`, and one more sync starts when that one ends, so the newest commit is always read.
+2. **Worker.** `startSyncWorker()` (started by `server.ts`) claims the oldest running sync with `claim_sync` (`FOR UPDATE SKIP LOCKED`, so instances never take the same one), polling every 5 seconds, or at once after a webhook. It renews its claim every minute; a claim older than 5 minutes means its worker stopped, and another takes the sync over. After 3 claims the sync is failed.
+3. **Reading.** An installation token for that one repository (contents, read-only) reads the branch's newest commit, which is recorded on the sync at once, then the whole repository as one archive. Only code and docs are kept: no dependencies, builds, media, lock files or files over 100 KB, at most 20 MB of text from at most a 200 MB download. When the commit is the one the current sync read, nothing is read and every feature stays as it is.
+4. **Features.** Claude gets the file list, as much code as fits in about 75k tokens, and the existing features (`syncs/plan.ts`), and answers at most 30 features, each with its files. A feature is matched to an existing one by name: a new name is `added`, and one whose files' contents hash differently is `changed`.
+5. **Scenarios.** For each added or changed feature, Claude writes 4 to 8 scenarios per role from that feature's files (`scenarios/writer.ts`), four features at a time.
+6. **Finishing.** `finish_sync` does it all in one transaction: freezes the previous sync's counts, saves the features, replaces the AI scenarios of changed features and clears their results, records the history, and marks the sync succeeded. A worker that lost its claim cannot finish.
+7. **Failing.** A known cause (the app is not installed, no commits, the repository is too large, the AI could not answer) becomes the sync's `failure` in plain words; anything else is logged and shown as a general sentence. A failed sync changes nothing else.
+
+Claude answers through one forced tool call whose input schema is made from a Zod schema, and the answer is parsed with that schema. Busy answers (429, 5xx) are retried three times with backoff. Text is cut to the database's limits, and a scenario without a title or expected result is dropped.
+
 ### GitHub access
 
 - **Who sees what.** `accessibleRepositories(userId)` (`features/projects/repositories.ts`) lists, with the person's own token, every installation of the Testick app they can access (`GET /user/installations`) and each one's repositories (`GET /user/installations/:id/repositories`). GitHub answers with the person's permission on each repository: admin or maintain makes them a Lead there. A project is visible exactly when its repository is in that list; otherwise it is a 404.
@@ -77,7 +96,7 @@ Not built yet: revoking the GitHub token on disconnect (planned in Settings).
 
 - **Fail fast**: wrong configuration stops the server at startup with a list of what is wrong.
 - **Timeouts**: every Supabase call is aborted after 10 seconds. Node's own server timeouts stay at their defaults.
-- **Graceful shutdown**: on `SIGTERM` or `SIGINT` the server stops taking connections, finishes the requests in flight, and exits. If that takes over 10 seconds it exits anyway.
+- **Graceful shutdown**: on `SIGTERM` or `SIGINT` the server stops taking connections, finishes the requests in flight, and exits. If that takes over 10 seconds it exits anyway. The sync worker stops claiming; a sync it was running is taken over by another worker when its claim runs out.
 - **Crashes**: an unhandled promise rejection stops the process (Node's default), and the host restarts it. That beats running on in an unknown state.
 - **Logs**: one JSON object per line in production, so any log tool can search by request id, status or path. Readable lines in development (`pino-pretty`).
 - **Source maps**: `npm start` runs with `--enable-source-maps`, so stack traces point at the TypeScript lines.
@@ -92,7 +111,8 @@ The app keeps no state in memory between requests apart from the rate-limit coun
 | GitHub access is cached in each process (`shortcut:` in `features/projects/repositories.ts`) | More than one instance runs: move it to the same Redis. |
 | Token renewal is one at a time per process only | Several instances renew the same person's token at the same moment often enough to sign people out: lock the `provider_tokens` row around the renewal in a Postgres function. |
 | Repository pages are read from GitHub one after another (`shortcut:` in `features/projects/repositories.ts`) | Someone has thousands of repositories: read the remaining pages in parallel. |
-| No job queue yet | Step 6: syncs and AI writing run in a worker from a queue, never inside a request. |
+| The sync worker runs inside each API process, one sync at a time (`shortcut:` in `features/syncs/worker.ts`) | Syncs queue up or slow the API: start the worker from its own entry point and run as many as needed; claims already allow it. |
+| One Claude model for every task (`shortcut:` in `lib/ai.ts`) | The bill matters: give small tasks a cheaper model. |
 | Compression is left to the host or proxy | The app is served without a proxy that compresses. |
 
 ## Adding to it

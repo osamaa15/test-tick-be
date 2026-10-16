@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { z } from 'zod'
 import { errorResponses, registry, sessionCookie } from '../../lib/openapi.js'
 import { limitRequests } from '../../lib/rateLimit.js'
 import { requireSession } from '../auth/session.js'
@@ -7,12 +8,13 @@ import {
   FeatureIdParams,
   FeatureParams,
   NewScenario,
+  RegenerateInput,
   ResultInput,
   Scenario,
   ScenarioInput,
   ScenarioParams,
 } from './schemas.js'
-import { addScenario, editScenario, getFeature, setResult } from './service.js'
+import { addScenario, editScenario, getFeature, regenerateScenarios, setResult } from './service.js'
 
 export const scenariosRouter = Router()
 
@@ -108,4 +110,31 @@ scenariosRouter.patch('/scenarios/:scenarioId', writeLimit, async (req, res) => 
   const { user } = await requireSession(req)
   const { scenarioId } = ScenarioParams.parse(req.params)
   res.json(await editScenario(user.id, scenarioId, ScenarioInput.parse(req.body)))
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/api/features/{featureId}/regenerate',
+  tags: ['scenarios'],
+  summary: "Rewrite one role's AI scenarios",
+  description:
+    "Claude rewrites the role's `ai` scenarios from the feature's code at the current sync; they get new ids and no result. `edited` and `manual` scenarios stay as they are. Takes up to a minute. It costs money, so it is limited to 20 requests an hour per caller.",
+  security,
+  request: {
+    params: FeatureIdParams,
+    body: { required: true, content: { 'application/json': { schema: RegenerateInput } } },
+  },
+  responses: {
+    200: {
+      description: "That role's scenarios afterwards, in the order they were written.",
+      content: { 'application/json': { schema: z.array(Scenario) } },
+    },
+    ...errorResponses(400, 401, 404, 429),
+  },
+})
+
+scenariosRouter.post('/features/:featureId/regenerate', limitRequests(20, 60), async (req, res) => {
+  const { user } = await requireSession(req)
+  const { featureId } = FeatureIdParams.parse(req.params)
+  res.json(await regenerateScenarios(user.id, featureId, RegenerateInput.parse(req.body).role))
 })

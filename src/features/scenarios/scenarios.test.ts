@@ -14,6 +14,7 @@ test('every scenarios route needs a session, before the body is read', async () 
     fetch(`${base}/api/scenarios/${id}/result`, json('PUT')),
     fetch(`${base}/api/features/${id}/scenarios`, json('POST')),
     fetch(`${base}/api/scenarios/${id}`, json('PATCH')),
+    fetch(`${base}/api/features/${id}/regenerate`, json('POST')),
   ]
   for (const res of await Promise.all(calls)) assert.equal(res.status, 401)
 })
