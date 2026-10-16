@@ -25,7 +25,7 @@ Roadmap, one step at a time:
 
 Decided: Testick is a **GitHub App** (not an OAuth App). People sign in through it, it reads repositories with fine-grained read-only permissions, and push webhooks come from its installations. A person sees the repositories they can access on the installations of the app. Syncs read code as the app itself (`GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`), with installation tokens scoped to one repository, read-only. Webhooks need the app's webhook switched on, with the Push event (README).
 
-Decided: the AI is **Gemini** (`gemini-3.8-flash`, free tier) through its OpenAI-compatible API, in `src/lib/ai.ts`. Any OpenAI-compatible provider works by changing `AI_BASE_URL` and `AI_MODEL`. On Gemini's free tier Google may use what is sent, repository code included, to improve its products; a paid key does not.
+Decided: the AI is **Gemini** (`gemini-3.6-flash`, falling back to `gemini-3.8-flash` and `gemini-3-flash-preview` when busy; free tier) through its OpenAI-compatible API, in `src/lib/ai.ts`. Any OpenAI-compatible provider works by changing `AI_BASE_URL` and `AI_MODEL`. On Gemini's free tier Google may use what is sent, repository code included, to improve its products; a paid key does not.
 
 Not decided yet (ask the user when the step comes): the email provider, hosting.
 

@@ -28,7 +28,7 @@ test('the AI is asked for structured output in the JSON schema of the shape, and
   const sent = provider(200, choice('{"names": ["apple", "pear"]}'))
   assert.deepEqual(await ask(), { names: ['apple', 'pear'] })
   assert.equal(sent.url, 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions')
-  assert.equal(sent.body?.model, 'gemini-3.8-flash')
+  assert.equal(sent.body?.model, 'gemini-3.6-flash')
   assert.deepEqual(sent.body?.messages, [
     { role: 'system', content: 'Be brief.' },
     { role: 'user', content: 'Name two fruits.' },
@@ -37,6 +37,27 @@ test('the AI is asked for structured output in the JSON schema of the shape, and
   assert.equal(format.type, 'json_schema')
   assert.equal(format.json_schema.schema.type, 'object')
   assert.equal('$schema' in format.json_schema.schema, false)
+})
+
+test('a busy model or a dropped connection moves on to the next model at once', async () => {
+  const models: unknown[] = []
+  const replies = [
+    () => new Response('{}', { status: 503 }),
+    () => {
+      throw new TypeError('fetch failed')
+    },
+    () => new Response(JSON.stringify(choice('{"names": ["fig"]}'))),
+  ]
+  globalThis.fetch = async (_url, init) => {
+    models.push(JSON.parse(String(init?.body)).model)
+    const reply = replies.shift()
+    if (!reply) throw new Error('asked too often')
+    return reply()
+  }
+  const started = Date.now()
+  assert.deepEqual(await ask(), { names: ['fig'] })
+  assert.deepEqual(models, ['gemini-3.6-flash', 'gemini-3.8-flash', 'gemini-3-flash-preview'])
+  assert.ok(Date.now() - started < 1000, 'no waiting while another model is left to try')
 })
 
 test('an answer that is cut off, not JSON, the wrong shape or refused is an AiError', async () => {

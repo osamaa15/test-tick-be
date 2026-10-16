@@ -94,7 +94,14 @@ async function runSync(sync: Tables<'syncs'>, log: Log): Promise<PlannedFeature[
   log.info({ features: planned.length, writing: toWrite.length }, 'found the features')
   await inBatches(toWrite, WRITERS, async (feature) => {
     const code = feature.paths.flatMap((path): [string, string][] => [[path, files.get(path) ?? '']])
-    feature.scenarios = await writeScenarios(feature, code, ['tester', 'developer'])
+    try {
+      feature.scenarios = await writeScenarios(feature, code, ['tester', 'developer'])
+    } catch (err) {
+      if (!(err instanceof AiError)) throw err
+      // One busy feature does not lose the others. Without a hash the next sync writes it; Regenerate can now.
+      log.warn({ err, feature: feature.name }, 'could not write scenarios')
+      feature.code_hash = null
+    }
   })
   return planned
 }
