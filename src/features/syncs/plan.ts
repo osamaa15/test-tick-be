@@ -1,10 +1,10 @@
 import { z } from 'zod'
-import { askClaude } from '../../lib/ai.js'
+import { askAi } from '../../lib/ai.js'
 import { sha256 } from '../../lib/crypto.js'
 import type { FeatureChange } from '../projects/schemas.js'
 import type { WrittenScenario } from '../scenarios/writer.js'
 
-// Finding a push's features with Claude, and working out which are new, changed or untouched.
+// Finding a push's features with the AI, and working out which are new, changed or untouched.
 
 /** A feature as the current sync left it. */
 export type KnownFeature = { id: string; name: string; description: string; paths: string[]; code_hash: string | null }
@@ -39,7 +39,7 @@ const MAX_PATHS = 15
 // About 75k tokens of code for finding features; files past it are listed by path only.
 const CODE_BUDGET = 300_000
 
-/** Asks Claude for the features in these files, reusing the names of the ones it already knows. */
+/** Asks the AI for the features in these files, reusing the names of the ones it already knows. */
 export async function discoverFeatures(files: Map<string, string>, known: KnownFeature[]) {
   let room = CODE_BUDGET
   const code = [...files].flatMap(([path, text]) => {
@@ -54,12 +54,12 @@ export async function discoverFeatures(files: Map<string, string>, known: KnownF
     `Every file in the repository:\n${[...files.keys()].slice(0, 5000).join('\n')}`,
     `Their contents (some are left out for length):\n\n${code.join('\n\n')}`,
   ]
-  const { features } = await askClaude({ system: SYSTEM, prompt: prompt.join('\n\n'), schema: Discovered })
+  const { features } = await askAi({ system: SYSTEM, prompt: prompt.join('\n\n'), schema: Discovered })
   return features
 }
 
 /**
- * Matches what Claude found to the known features by name. A feature is `added` when its name is new, and
+ * Matches what the AI found to the known features by name. A feature is `added` when its name is new, and
  * `changed` when the code of its files is not what it was. Names are deduplicated and paths kept to real files.
  */
 export function planFeatures(known: KnownFeature[], found: DiscoveredFeature[], files: Map<string, string>): PlannedFeature[] {

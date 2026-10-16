@@ -11,7 +11,7 @@ Built:
 - Step 3, sign-in: `GET /api/auth/github` and its callback (GitHub App user sign-in with a state cookie), `GET /api/session`, `POST /api/auth/sign-out`, `PATCH /api/me`. Sessions live in the `sessions` table behind an httpOnly cookie, and GitHub tokens are stored sealed (AES-256-GCM) in `provider_tokens`. Sign-in ends on the frontend's `/auth/callback`, which the frontend does not have yet.
 - Step 4, projects: `GET /api/repositories`, `POST /api/projects`, `GET /api/projects`, `GET /api/projects/:projectId`. Who may see a project, and who is a Lead, is read from GitHub with the person's own token (`features/auth/tokens.ts` renews it every 8 hours) and kept for a minute per person. Counts and New or Changed marks come from Postgres functions (`docs/database.md`). Connecting starts the project's first sync.
 - Step 5, scenarios: `GET /api/projects/:projectId/features/:featureId` (also clears the person's New or Changed mark), `PUT /api/scenarios/:scenarioId/result`, `POST /api/features/:featureId/scenarios`, `PATCH /api/scenarios/:scenarioId`. Access to a feature or scenario is its project's repository. `POST /api/features/:featureId/regenerate` came with step 6, because it needs the AI and the feature's code.
-- Step 6, syncs: the sync worker (`features/syncs/worker.ts`, started by `server.ts`) takes running syncs from the `syncs` table, reads the push as the GitHub App, has Claude find the features and write scenarios for new and changed ones, and ends the sync with `finish_sync`. `POST /api/webhooks/github` (signed) starts a sync on a push to the default branch. `POST /api/features/:featureId/regenerate` and `GET /api/projects/:projectId/syncs`. How it works is in `docs/architecture.md` (Syncs).
+- Step 6, syncs: the sync worker (`features/syncs/worker.ts`, started by `server.ts`) takes running syncs from the `syncs` table, reads the push as the GitHub App, has the AI find the features and write scenarios for new and changed ones, and ends the sync with `finish_sync`. `POST /api/webhooks/github` (signed) starts a sync on a push to the default branch. `POST /api/features/:featureId/regenerate` and `GET /api/projects/:projectId/syncs`. How it works is in `docs/architecture.md` (Syncs).
 
 Roadmap, one step at a time:
 
@@ -25,11 +25,11 @@ Roadmap, one step at a time:
 
 Decided: Testick is a **GitHub App** (not an OAuth App). People sign in through it, it reads repositories with fine-grained read-only permissions, and push webhooks come from its installations. A person sees the repositories they can access on the installations of the app. Syncs read code as the app itself (`GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`), with installation tokens scoped to one repository, read-only. Webhooks need the app's webhook switched on, with the Push event (README).
 
-Decided: **Claude** (Anthropic's API, `claude-sonnet-5-5`, in `src/lib/ai.ts`) finds features and writes scenarios.
+Decided: the AI is **Gemini** (`gemini-3.8-flash`, free tier) through its OpenAI-compatible API, in `src/lib/ai.ts`. Any OpenAI-compatible provider works by changing `AI_BASE_URL` and `AI_MODEL`. On Gemini's free tier Google may use what is sent, repository code included, to improve its products; a paid key does not.
 
 Not decided yet (ask the user when the step comes): the email provider, hosting.
 
-Stack: Node 22, Express 5, TypeScript, Zod 4 (validation and OpenAPI), Supabase (Postgres) through `@supabase/supabase-js`, pino logs, helmet, express-rate-limit, swagger-ui-express, `node:test` through tsx, oxlint, `tar` (reads repository archives). Claude is called with `fetch`, without an SDK. Versions are in `package.json`.
+Stack: Node 22, Express 5, TypeScript, Zod 4 (validation and OpenAPI), Supabase (Postgres) through `@supabase/supabase-js`, pino logs, helmet, express-rate-limit, swagger-ui-express, `node:test` through tsx, oxlint, `tar` (reads repository archives). The AI is called with `fetch`, without an SDK. Versions are in `package.json`.
 
 ## Commands
 
@@ -47,13 +47,13 @@ src/
   config.ts            every environment variable, checked with Zod at startup
   testServer.ts        test helper: fake config and the app on a free port (not built)
   lib/                 shared plumbing: logger, errors, rateLimit, openapi, supabase, database.types, crypto,
-                       github (REST calls), githubApp (the app's JWT, installation tokens, files), ai (Claude)
+                       github (REST calls), githubApp (the app's JWT, installation tokens, files), ai (the AI)
   features/<name>/     one area of the API contract (auth, contact, projects, scenarios, syncs):
     schemas.ts           Zod schemas for requests and responses, named as in the frontend's types.ts
     routes.ts            the router: each route's OpenAPI registration sits right above it
     service.ts           database and provider calls. No Express in here.
     (more files)         when service.ts would do two jobs: auth/tokens.ts (GitHub tokens), projects/repositories.ts (access from GitHub),
-                         scenarios/writer.ts (Claude writes scenarios), syncs/code.ts, plan.ts and worker.ts (the sync worker)
+                         scenarios/writer.ts (the AI writes scenarios), syncs/code.ts, plan.ts and worker.ts (the sync worker)
   **/*.test.ts         tests beside the code they test
 supabase/migrations/   the database schema, one SQL file per change, never edited after it is pushed
 ```

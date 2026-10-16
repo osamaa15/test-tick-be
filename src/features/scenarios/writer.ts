@@ -1,9 +1,9 @@
 import { z } from 'zod'
-import { askClaude } from '../../lib/ai.js'
+import { askAi } from '../../lib/ai.js'
 import { Role } from '../auth/schemas.js'
 import { ScenarioKind, type ScenarioInput } from './schemas.js'
 
-// Writing a feature's scenarios with Claude: for a sync (both roles) and for regenerating (one role).
+// Writing a feature's scenarios with the AI: for a sync (both roles) and for regenerating (one role).
 
 const Written = z.object({
   scenarios: z.array(
@@ -51,7 +51,7 @@ export async function writeScenarios(
     existing.length ? `These scenarios exist and stay:\n${existing.map((title) => `- ${title}`).join('\n')}` : '',
     code.length ? `The feature's code:\n\n${code.join('\n\n')}` : 'Its code could not be read; write from the description.',
   ]
-  const { scenarios } = await askClaude({ system: SYSTEM, prompt: prompt.filter(Boolean).join('\n\n'), schema: Written })
+  const { scenarios } = await askAi({ system: SYSTEM, prompt: prompt.filter(Boolean).join('\n\n'), schema: Written })
 
   // The same limits the database keeps. A scenario with no title or expected result is dropped.
   return scenarios.flatMap((scenario): WrittenScenario[] => {

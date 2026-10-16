@@ -26,7 +26,9 @@ const Env = z.object({
     .string()
     .refine(isPrivateKey, "Must be the GitHub App's private key (.pem), base64-encoded on one line. See .env.example."),
   GITHUB_WEBHOOK_SECRET: z.string().min(20, 'Must be at least 20 random characters. See .env.example.'),
-  ANTHROPIC_API_KEY: z.string().min(1),
+  AI_API_KEY: z.string().min(1),
+  AI_BASE_URL: z.url().default('https://generativelanguage.googleapis.com/v1beta/openai'),
+  AI_MODEL: z.string().min(1).default('gemini-3.8-flash'),
   TOKEN_ENCRYPTION_KEY: z
     .string()
     .refine((key) => Buffer.from(key, 'base64').length === 32, 'Must be 32 random bytes in base64. See .env.example.'),

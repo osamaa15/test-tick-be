@@ -4,7 +4,7 @@ The API for the Testick frontend: Express 5, TypeScript and Supabase. It answers
 
 ## Run it
 
-Needs Node 22.9 or newer, a Supabase project and a GitHub App (callback URL `http://localhost:4000/api/auth/github/callback`, repository permission Contents: read-only), installed on the accounts whose repositories you want to connect. Only those repositories are listed. Syncs also need the app's **App ID** and a **private key**, a **webhook** (below), and a **Claude API key** from console.anthropic.com. `.env.example` says where each value comes from.
+Needs Node 22.9 or newer, a Supabase project and a GitHub App (callback URL `http://localhost:4000/api/auth/github/callback`, repository permission Contents: read-only), installed on the accounts whose repositories you want to connect. Only those repositories are listed. Syncs also need the app's **App ID** and a **private key**, a **webhook** (below), and an **AI key**: a free Gemini key from aistudio.google.com/apikey. `.env.example` says where each value comes from.
 
 ```sh
 npm install

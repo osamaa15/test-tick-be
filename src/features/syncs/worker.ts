@@ -9,14 +9,15 @@ import { writeScenarios } from '../scenarios/writer.js'
 import { readRepository, SyncFailure } from './code.js'
 import { discoverFeatures, planFeatures, type KnownFeature, type PlannedFeature } from './plan.js'
 
-// The sync worker: claims running syncs from the database one at a time, reads the push, has Claude find the
+// The sync worker: claims running syncs from the database one at a time, reads the push, has the AI find the
 // features and write scenarios for the new and changed ones, and ends the sync with finish_sync.
 // shortcut: it runs inside the API process; start it from its own entry point when syncs slow the API down.
 
 const POLL_MS = 5_000
 const RENEW_CLAIM_MS = 60_000
 const MAX_ATTEMPTS = 3
-const WRITERS = 4
+// Two at a time stays under free tiers' requests-per-minute limits; retries cover the rest.
+const WRITERS = 2
 
 type Log = typeof logger
 

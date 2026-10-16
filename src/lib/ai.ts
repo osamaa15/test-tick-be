@@ -1,58 +1,55 @@
 import { z } from 'zod'
 import { config } from '../config.js'
 
-// shortcut: one model for every task; give small tasks a cheaper model when the bill says so.
-const MODEL = 'claude-sonnet-5-5'
+// Any provider with an OpenAI-compatible chat API: Gemini by default (AI_BASE_URL, AI_MODEL in .env.example).
 
-/** Claude could not answer: refused, overloaded after retries, cut off, or the key is wrong. */
+/** The AI could not answer: refused, overloaded after retries, cut off, or the key is wrong. */
 export class AiError extends Error {}
 
 const Answer = z.object({
-  content: z.array(z.object({ type: z.string(), input: z.unknown().optional() })),
-  stop_reason: z.string().nullable(),
+  choices: z.array(z.object({ message: z.object({ content: z.string().nullable() }), finish_reason: z.string().nullable() })),
 })
 
 /**
- * Asks Claude for an answer shaped like `schema`: it must answer by calling one tool whose input is that shape.
- * Waits and retries up to three times while Anthropic is busy (429, 5xx).
+ * Asks the AI for an answer shaped like `schema` (structured output from its JSON schema), parsed with that schema.
+ * Waits and retries up to three times while the provider is busy or rate limits (429, 5xx), as free tiers often do.
  */
-export async function askClaude<T extends z.ZodType>(request: {
-  system: string
-  prompt: string
-  schema: T
-}): Promise<z.infer<T>> {
-  const { $schema: _, ...inputSchema } = z.toJSONSchema(request.schema) as Record<string, unknown>
+export async function askAi<T extends z.ZodType>(request: { system: string; prompt: string; schema: T }): Promise<z.infer<T>> {
+  const { $schema: _, ...schema } = z.toJSONSchema(request.schema) as Record<string, unknown>
   const body = JSON.stringify({
-    model: MODEL,
-    max_tokens: 16_000,
-    system: request.system,
-    messages: [{ role: 'user', content: request.prompt }],
-    tools: [{ name: 'answer', description: 'Give your answer.', input_schema: inputSchema }],
-    tool_choice: { type: 'tool', name: 'answer' },
+    model: config.AI_MODEL,
+    // Thinking models count their thinking in this too.
+    max_tokens: 32_000,
+    messages: [
+      { role: 'system', content: request.system },
+      { role: 'user', content: request.prompt },
+    ],
+    response_format: { type: 'json_schema', json_schema: { name: 'answer', schema } },
   })
 
   for (let attempt = 1; ; attempt++) {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetch(`${config.AI_BASE_URL}/chat/completions`, {
       method: 'POST',
-      headers: {
-        'x-api-key': config.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-      },
+      headers: { authorization: `Bearer ${config.AI_API_KEY}`, 'content-type': 'application/json' },
       body,
       signal: AbortSignal.timeout(300_000),
     })
     if ((res.status === 429 || res.status >= 500) && attempt <= 3) {
       await res.body?.cancel()
-      const seconds = Math.min(Number(res.headers.get('retry-after')) || 5 * 2 ** attempt, 60)
+      const seconds = Math.min(Number(res.headers.get('retry-after')) || 10 * 2 ** attempt, 60)
       await new Promise((resolve) => setTimeout(resolve, seconds * 1000))
       continue
     }
-    if (!res.ok) throw new AiError(`Anthropic answered ${res.status}: ${(await res.text()).slice(0, 300)}`)
-    const answer = Answer.parse(await res.json())
-    if (answer.stop_reason === 'max_tokens') throw new AiError('The answer was cut off at the token limit')
-    const call = answer.content.find((block) => block.type === 'tool_use')
-    const parsed = request.schema.safeParse(call?.input)
+    if (!res.ok) throw new AiError(`The AI answered ${res.status}: ${(await res.text()).slice(0, 300)}`)
+    const [choice] = Answer.parse(await res.json()).choices
+    if (choice?.finish_reason === 'length') throw new AiError('The answer was cut off at the token limit')
+    let json: unknown
+    try {
+      json = JSON.parse(choice?.message.content ?? '')
+    } catch {
+      throw new AiError('The answer was not JSON')
+    }
+    const parsed = request.schema.safeParse(json)
     if (!parsed.success) throw new AiError(`The answer did not have the asked shape: ${parsed.error.message.slice(0, 300)}`)
     return parsed.data
   }

@@ -128,7 +128,7 @@ export async function editScenario(userId: string, scenarioId: string, input: Sc
 }
 
 /**
- * Has Claude rewrite one role's AI scenarios from the feature's code at the current sync, and returns that role's
+ * Has the AI rewrite one role's AI scenarios from the feature's code at the current sync, and returns that role's
  * scenarios afterwards. Edited and hand-written ones stay as they are, with their results.
  */
 export async function regenerateScenarios(userId: string, featureId: string, role: Role): Promise<Scenario[]> {

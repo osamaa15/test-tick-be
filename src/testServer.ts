@@ -17,7 +17,7 @@ Object.assign(process.env, {
     generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey.export({ type: 'pkcs8', format: 'pem' }),
   ).toString('base64'),
   GITHUB_WEBHOOK_SECRET: 'test-webhook-secret-0123456789',
-  ANTHROPIC_API_KEY: 'test',
+  AI_API_KEY: 'test',
   TOKEN_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
 })
 
