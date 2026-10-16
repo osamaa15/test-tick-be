@@ -433,7 +433,44 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      connect_projects: {
+        Args: { p_repos: Json; p_user_id: string }
+        Returns: undefined
+      }
+      feature_summaries: {
+        Args: { p_project_ids: string[]; p_user_id: string }
+        Returns: {
+          change: string
+          description: string
+          developer_failed: number
+          developer_passed: number
+          developer_total: number
+          id: string
+          name: string
+          project_id: string
+          tester_failed: number
+          tester_passed: number
+          tester_total: number
+        }[]
+      }
+      project_summaries: {
+        Args: { p_repo_ids: string[]; p_user_id: string }
+        Returns: {
+          developer_failed: number
+          developer_passed: number
+          developer_total: number
+          feature_count: number
+          id: string
+          latest_commit_sha: string
+          latest_started_at: string
+          latest_status: string
+          new_feature_count: number
+          provider_repo_id: string
+          tester_failed: number
+          tester_passed: number
+          tester_total: number
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

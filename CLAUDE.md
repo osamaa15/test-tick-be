@@ -9,18 +9,19 @@ Built:
 - Step 1, the foundation. Express 5 + TypeScript, config checked at startup, security headers, CORS, rate limits, request logs, one error format, Swagger, graceful shutdown, tests, and `POST /api/contact` (stored, not emailed yet).
 - Step 2, the database: `users`, `projects`, `syncs`, `features`, `scenarios` (with the team's result), `sync_features` (history) and `feature_views` (New or Changed marks), pushed to the linked Supabase project. How they map to the API is in `docs/database.md`. Postgres functions for regenerating and finishing a sync come with their endpoints.
 - Step 3, sign-in: `GET /api/auth/github` and its callback (GitHub App user sign-in with a state cookie), `GET /api/session`, `POST /api/auth/sign-out`, `PATCH /api/me`. Sessions live in the `sessions` table behind an httpOnly cookie, and GitHub tokens are stored sealed (AES-256-GCM) in `provider_tokens`. Sign-in ends on the frontend's `/auth/callback`, which the frontend does not have yet.
+- Step 4, projects: `GET /api/repositories`, `POST /api/projects`, `GET /api/projects`, `GET /api/projects/:projectId`. Who may see a project, and who is a Lead, is read from GitHub with the person's own token (`features/auth/tokens.ts` renews it every 8 hours) and kept for a minute per person. Counts and New or Changed marks come from Postgres functions (`docs/database.md`). A connected project's first sync stays `running` until step 6 builds the worker.
 
 Roadmap, one step at a time:
 
 1. ~~Foundation and contact~~
 2. ~~Database tables for users, projects, features, scenarios, results and syncs~~
 3. ~~Sign in with GitHub and session cookies: `/api/session`, `/api/auth/*`, `/api/me`~~
-4. Projects and repositories, read from the provider
+4. ~~Projects and repositories, read from the provider~~
 5. Scenarios: read a feature, mark results, add, edit, regenerate
 6. Syncs: push webhooks, a job queue, AI writing scenarios
 7. Contact emails, and the frontend's services switched from mocks to this API
 
-Decided: Testick is a **GitHub App** (not an OAuth App). People sign in through it, it reads repositories with fine-grained read-only permissions, and push webhooks come from its installations.
+Decided: Testick is a **GitHub App** (not an OAuth App). People sign in through it, it reads repositories with fine-grained read-only permissions, and push webhooks come from its installations. A person sees the repositories they can access on the installations of the app. The app's own ID and private key (`GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, already in the local `.env`) join `config.ts` in step 6, when syncs read code.
 
 Not decided yet (ask the user when the step comes): the AI and email providers, hosting.
 
@@ -41,11 +42,12 @@ src/
   app.ts               builds the app: middleware in order, routers, Swagger, 404, errors
   config.ts            every environment variable, checked with Zod at startup
   testServer.ts        test helper: fake config and the app on a free port (not built)
-  lib/                 shared plumbing: logger, errors, rateLimit, openapi, supabase, database.types, crypto
-  features/<name>/     one area of the API contract (auth, contact, later projects, scenarios, syncs):
+  lib/                 shared plumbing: logger, errors, rateLimit, openapi, supabase, database.types, crypto, github
+  features/<name>/     one area of the API contract (auth, contact, projects, later scenarios, syncs):
     schemas.ts           Zod schemas for requests and responses, named as in the frontend's types.ts
     routes.ts            the router: each route's OpenAPI registration sits right above it
     service.ts           database and provider calls. No Express in here.
+    (more files)         when service.ts would do two jobs: auth/tokens.ts (GitHub tokens), projects/repositories.ts (access from GitHub)
   **/*.test.ts         tests beside the code they test
 supabase/migrations/   the database schema, one SQL file per change, never edited after it is pushed
 ```
@@ -54,7 +56,8 @@ supabase/migrations/   the database schema, one SQL file per change, never edite
 
 - **Validate at the edge.** Every request body, param and query is parsed with its Zod schema in the handler (`Schema.parse(req.body)`). A `ZodError` becomes a 400 by itself. Never trust a value the client sent before that.
 - **Errors.** Throw `HttpError(status, message)` for the caller's mistakes, with a message written for people. Anything else is a 500 that is logged and never shown. Express 5 passes a rejected promise to the error handler: no try/catch just to forward it. The format is in `docs/architecture.md`.
-- **Sign-in.** A route behind sign-in starts with `const { user } = await requireSession(req)` (from `features/auth/session.ts`), declares `security: [{ [sessionCookie.name]: [] }]` in Swagger, and has a test that it answers 401 without a cookie. Other features may import `features/auth/session.ts` and `features/auth/schemas.ts`; nothing else from another feature.
+- **Sign-in.** A route behind sign-in starts with `const { user } = await requireSession(req)` (from `features/auth/session.ts`), declares `security: [{ [sessionCookie.name]: [] }]` in Swagger, and has a test that it answers 401 without a cookie. Other features may import `features/auth/session.ts`, `schemas.ts` and `tokens.ts`; nothing else from another feature.
+- **GitHub as the person.** Every call with a person's token goes through `asGitHubUser(userId, call)` from `features/auth/tokens.ts`: it renews the token, and when GitHub no longer takes it, ends their sessions and answers 401. Never read `provider_tokens` anywhere else.
 - **404 for "not yours".** A thing the person may not see answers 404, exactly like one that does not exist, so the API never reveals what exists.
 - **Every route is in Swagger.** Register it with `registry.registerPath` directly above the route, using the same Zod schemas the handler parses. A route missing from `/api/docs` is unfinished.
 - **Rate limits.** `/api` has a generous limit for everyone. A public route, or one that writes, costs money or sends something, adds its own lower `limitRequests(...)`.

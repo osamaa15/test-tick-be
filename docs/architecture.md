@@ -44,7 +44,7 @@ The frontend turns a 404 into `NotFoundError` and any other failure into `Error`
 - **Input**: every body, param and query is parsed with Zod at the handler. Strings are trimmed and have a maximum length. The database repeats the most important limits as `check` constraints.
 - **Headers**: helmet's defaults. Swagger UI works with them because it loads its scripts as files.
 - **CORS**: one allowed origin, `FRONTEND_URL`. No wildcard, because the API uses cookies.
-- **Rate limits**: per IP address. `/api` allows 1000 requests per 15 minutes (the frontend polls every 3 seconds while a sync runs). `POST /api/contact` allows 5 an hour. Sign-in (`/api/auth/github` and its callback together) allows 20 per 15 minutes. Answers carry the `RateLimit` and `RateLimit-Policy` headers (IETF draft 8).
+- **Rate limits**: per IP address. `/api` allows 1000 requests per 15 minutes (the frontend polls every 3 seconds while a sync runs). `POST /api/contact` allows 5 an hour. Sign-in (`/api/auth/github` and its callback together) allows 20 per 15 minutes. `GET /api/repositories` (asks GitHub every time) allows 60 per 15 minutes, and connecting (`POST /api/projects`) 30. Answers carry the `RateLimit` and `RateLimit-Policy` headers (IETF draft 8).
 - **Secrets**: only in `.env` (git-ignored), read only by `config.ts`, which stops the server at startup when one is missing or wrong. Request logs carry no headers or query strings, and the logger also redacts cookie and authorization headers anywhere they appear.
 - **Database**: the server uses the Supabase secret key and checks access itself. Row level security is on for every table with no policies, so the public `anon` key can read nothing. See `docs/database.md`.
 - **Errors**: a 500 never sends its message or stack to the caller.
@@ -63,7 +63,15 @@ The frontend turns a 404 into `NotFoundError` and any other failure into `Error`
 - **Signing out** deletes the session row, so a stolen cookie stops working at once. Deleting a user deletes their sessions and tokens.
 - **Routes behind sign-in** call `requireSession(req)`, which answers 401 without a valid session.
 
-Not built yet: per-user rate limits (with step 4's routes), and revoking the GitHub token on disconnect (planned in Settings).
+Not built yet: revoking the GitHub token on disconnect (planned in Settings).
+
+### GitHub access
+
+- **Who sees what.** `accessibleRepositories(userId)` (`features/projects/repositories.ts`) lists, with the person's own token, every installation of the Testick app they can access (`GET /user/installations`) and each one's repositories (`GET /user/installations/:id/repositories`). GitHub answers with the person's permission on each repository: admin or maintain makes them a Lead there. A project is visible exactly when its repository is in that list; otherwise it is a 404.
+- **Cache.** That list is kept for 60 seconds per person, so the 3-second polling while a sync runs reads GitHub once a minute. `GET /api/repositories` always reads it fresh (and refreshes the cache), because people arrive there after changing the app's access on GitHub. Losing access therefore takes up to a minute to show.
+- **Token renewal.** GitHub App user tokens last 8 hours. `asGitHubUser` (`features/auth/tokens.ts`) renews one a minute before it runs out and stores the new pair sealed. A refresh token works once, so a process renews each person's token one request at a time, and a renewal that GitHub refuses rereads the stored tokens in case another server just renewed them.
+- **Ended sign-in.** When GitHub refuses the token (the person revoked the app, or the refresh token ran out after 6 months unused), or the stored tokens cannot be opened (`TOKEN_ENCRYPTION_KEY` changed), all the person's sessions are deleted and the request answers 401 "Your GitHub sign-in has ended. Sign in again." `GET /api/session` then answers `null`, and the frontend shows sign-in.
+- A GitHub outage or rate limit is a 500 that is logged, like any other failure. Nothing is cached from a failed read.
 
 ## Reliability
 
@@ -76,13 +84,15 @@ Not built yet: per-user rate limits (with step 4's routes), and revoking the Git
 
 ## Scaling
 
-The app keeps no state in memory between requests apart from the rate-limit counts, so more instances can run behind a load balancer. Before that happens:
+The app keeps no state in memory between requests apart from the rate-limit counts and the one-minute cache of GitHub access, so more instances can run behind a load balancer. Before that happens:
 
 | Limit today | Change when |
 | --- | --- |
-| Rate-limit counts live in each process (`shortcut:` in `src/lib/rateLimit.ts`) | More than one instance runs: give `limitRequests` a shared store such as `rate-limit-redis`. |
+| Rate-limit counts live in each process (`shortcut:` in `src/lib/rateLimit.ts`), keyed by IP address, so a team behind one office address shares one limit | More than one instance runs: give `limitRequests` a shared store such as `rate-limit-redis`. Teams hit 429s together: key signed-in requests by person. |
+| GitHub access is cached in each process (`shortcut:` in `features/projects/repositories.ts`) | More than one instance runs: move it to the same Redis. |
+| Token renewal is one at a time per process only | Several instances renew the same person's token at the same moment often enough to sign people out: lock the `provider_tokens` row around the renewal in a Postgres function. |
+| Repository pages are read from GitHub one after another (`shortcut:` in `features/projects/repositories.ts`) | Someone has thousands of repositories: read the remaining pages in parallel. |
 | No job queue yet | Step 6: syncs and AI writing run in a worker from a queue, never inside a request. |
-| No caching of provider calls yet | Step 4: cache what the provider answers about repositories and access for a short time, per user. |
 | Compression is left to the host or proxy | The app is served without a proxy that compresses. |
 
 ## Adding to it

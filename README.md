@@ -4,7 +4,7 @@ The API for the Testick frontend: Express 5, TypeScript and Supabase. It answers
 
 ## Run it
 
-Needs Node 22.9 or newer, a Supabase project and a GitHub App (callback URL `http://localhost:4000/api/auth/github/callback`, repository permission Contents: read-only).
+Needs Node 22.9 or newer, a Supabase project and a GitHub App (callback URL `http://localhost:4000/api/auth/github/callback`, repository permission Contents: read-only), installed on the accounts whose repositories you want to connect. Only those repositories are listed.
 
 ```sh
 npm install

@@ -25,6 +25,8 @@ Work in the main conversation. No subagents, nothing left running in the backgro
 - Database and provider calls only. It takes plain typed values and returns the response type. No `req` or `res` in here.
 - `const { data, error } = await supabase.from(...)...; if (error) throw error`
 - Turn snake_case rows into the camelCase response shape here.
+- Who may see a project comes from `accessibleRepositories(userId)` in `features/projects/repositories.ts` (cached a minute). Any other GitHub call as the person goes through `asGitHubUser(userId, call)` from `../auth/tokens.js`.
+- Sums and joins over many rows (counts, marks) belong in a Postgres function, one round trip, as `project_summaries` does.
 - Something that does not exist, **or that the person may not see**, is `throw new HttpError(404, 'Not found.')`. Same answer for both, so nothing leaks.
 - Several writes that must happen together go in one Postgres function, called with `supabase.rpc(...)` (see `docs/database.md`).
 

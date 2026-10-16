@@ -46,9 +46,21 @@ Without the CLI, a migration can also be pasted into the Supabase SQL editor. Th
 | `sessions` | One per signed-in browser: the SHA-256 of the cookie's token, the person, when it expires (30 days) | Step 3 |
 | `provider_tokens` | Each person's GitHub access and refresh tokens, sealed with AES-256-GCM, and when they expire | Step 3 |
 
+## Functions
+
+Called with `supabase.rpc(...)`. Each takes the person (`p_user_id`) and, where access matters, the repositories they can access on the provider, because Postgres cannot know those. Execute is revoked from `anon` and `authenticated`, so only the server can call them.
+
+| Function | Does | Used by | Since |
+| --- | --- | --- | --- |
+| `feature_summaries(p_user_id, p_project_ids)` | The current features of these projects, in the order they were found, with this person's New or Changed mark and the counts per role | `GET /api/projects/:projectId` | Step 4 |
+| `project_summaries(p_user_id, p_repo_ids)` | Each connected project among these repositories: its newest sync, its feature and new-feature counts, and its counts per role (its features' added up). Most recently synced first | Every projects route | Step 4 |
+| `connect_projects(p_user_id, p_repos)` | Makes the projects and each one's first `running` sync together. An existing project is left alone, and gets a sync only if it has none | `POST /api/projects` | Step 4 |
+
 ### How the API's ideas map to the tables
 
-- **Lead and visibility** are not stored. Both come from the provider on each request: who can access the repository, and with what permission.
+- **Lead and visibility** are not stored. Both come from the provider (cached a minute): who can access the repository, and with what permission. See "GitHub access" in `docs/architecture.md`.
+- **A project's repository names** (`owner`, `name`, `visibility`, `default_branch`) are stored as they were when it was connected. The API answers with the provider's current values, which stay right after a rename.
+- **The current features** are the `sync_features` rows of the current sync. A feature a later sync no longer found keeps its rows for the history but drops off the project page.
 - **The current sync** is the project's newest `succeeded` sync. `latestSync` is its newest sync of any status. A unique index allows only one `running` sync per project.
 - **The result** is three columns on `scenarios`, one per scenario for the whole team. A check keeps `verdict` and `marked_at` set or cleared together. A sync that finds a feature changed clears them.
 - **Counts** (`total`, `passed`, `failed` per role) are added up from `scenarios` for the current sync. When the next sync finishes, the previous current sync's `sync_features.scenarios` is filled with the counts as they stood, as `{"tester": {...}, "developer": {...}}`. It stays null while that sync is current.
