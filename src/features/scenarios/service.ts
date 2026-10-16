@@ -150,7 +150,8 @@ export async function regenerateScenarios(userId: string, featureId: string, rol
   const { owner, name, id } = repository
   const token = await installationToken(owner, name, id)
   const files = current.data.commit_sha ? await readFiles(token, owner, name, current.data.commit_sha, feature.paths) : []
-  const written = await writeScenarios(feature, files, [role], kept.data.map((scenario) => scenario.title))
+  const existing = kept.data.map((scenario) => scenario.title)
+  const [written = []] = await writeScenarios([{ name: feature.name, description: feature.description, files, existing }], [role])
 
   const replaced = await supabase.rpc('replace_ai_scenarios', {
     p_feature_id: featureId,

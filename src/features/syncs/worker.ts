@@ -16,7 +16,8 @@ import { discoverFeatures, planFeatures, type KnownFeature, type PlannedFeature 
 const POLL_MS = 5_000
 const RENEW_CLAIM_MS = 60_000
 const MAX_ATTEMPTS = 3
-// Two at a time stays under free tiers' requests-per-minute limits; retries cover the rest.
+// Free tiers count requests per day and per minute: up to 5 features share a request, two requests at a time.
+const FEATURES_PER_REQUEST = 5
 const WRITERS = 2
 
 type Log = typeof logger
@@ -48,7 +49,7 @@ async function currentFeatures(projectId: string) {
 }
 
 /** Calls `work` on every item, at most `limit` at a time. */
-async function inBatches<T>(items: T[], limit: number, work: (item: T) => Promise<void>) {
+async function inParallel<T>(items: T[], limit: number, work: (item: T) => Promise<void>) {
   const queue = [...items]
   await Promise.all(
     Array.from({ length: Math.min(limit, items.length) }, async () => {
@@ -92,16 +93,29 @@ async function runSync(sync: Tables<'syncs'>, log: Log): Promise<PlannedFeature[
 
   const toWrite = planned.filter((feature) => feature.change !== null)
   log.info({ features: planned.length, writing: toWrite.length }, 'found the features')
-  await inBatches(toWrite, WRITERS, async (feature) => {
-    const code = feature.paths.flatMap((path): [string, string][] => [[path, files.get(path) ?? '']])
+  const requests = Array.from({ length: Math.ceil(toWrite.length / FEATURES_PER_REQUEST) }, (_, index) =>
+    toWrite.slice(index * FEATURES_PER_REQUEST, (index + 1) * FEATURES_PER_REQUEST),
+  )
+  await inParallel(requests, WRITERS, async (batch) => {
     try {
-      feature.scenarios = await writeScenarios(feature, code, ['tester', 'developer'])
+      const written = await writeScenarios(
+        batch.map((feature) => ({
+          name: feature.name,
+          description: feature.description,
+          files: feature.paths.map((path): [string, string] => [path, files.get(path) ?? '']),
+        })),
+        ['tester', 'developer'],
+      )
+      batch.forEach((feature, index) => {
+        feature.scenarios = written[index] ?? []
+      })
     } catch (err) {
       if (!(err instanceof AiError)) throw err
-      // One busy feature does not lose the others. Without a hash the next sync writes it; Regenerate can now.
-      log.warn({ err, feature: feature.name }, 'could not write scenarios')
-      feature.code_hash = null
+      log.warn({ err, features: batch.map((feature) => feature.name) }, 'could not write scenarios')
     }
+    // A busy request does not lose the others. A feature left without scenarios keeps no hash, so the next
+    // sync writes them; Regenerate can now.
+    for (const feature of batch) if (feature.scenarios.length === 0) feature.code_hash = null
   })
   return planned
 }
