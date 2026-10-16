@@ -10,6 +10,7 @@ Built:
 - Step 2, the database: `users`, `projects`, `syncs`, `features`, `scenarios` (with the team's result), `sync_features` (history) and `feature_views` (New or Changed marks), pushed to the linked Supabase project. How they map to the API is in `docs/database.md`. Postgres functions for regenerating and finishing a sync come with their endpoints.
 - Step 3, sign-in: `GET /api/auth/github` and its callback (GitHub App user sign-in with a state cookie), `GET /api/session`, `POST /api/auth/sign-out`, `PATCH /api/me`. Sessions live in the `sessions` table behind an httpOnly cookie, and GitHub tokens are stored sealed (AES-256-GCM) in `provider_tokens`. Sign-in ends on the frontend's `/auth/callback`, which the frontend does not have yet.
 - Step 4, projects: `GET /api/repositories`, `POST /api/projects`, `GET /api/projects`, `GET /api/projects/:projectId`. Who may see a project, and who is a Lead, is read from GitHub with the person's own token (`features/auth/tokens.ts` renews it every 8 hours) and kept for a minute per person. Counts and New or Changed marks come from Postgres functions (`docs/database.md`). A connected project's first sync stays `running` until step 6 builds the worker.
+- Step 5, scenarios: `GET /api/projects/:projectId/features/:featureId` (also clears the person's New or Changed mark), `PUT /api/scenarios/:scenarioId/result`, `POST /api/features/:featureId/scenarios`, `PATCH /api/scenarios/:scenarioId`. Access to a feature or scenario is its project's repository. `POST /api/features/:featureId/regenerate` moved to step 6, because it needs the AI and the feature's code that syncs read.
 
 Roadmap, one step at a time:
 
@@ -17,8 +18,8 @@ Roadmap, one step at a time:
 2. ~~Database tables for users, projects, features, scenarios, results and syncs~~
 3. ~~Sign in with GitHub and session cookies: `/api/session`, `/api/auth/*`, `/api/me`~~
 4. ~~Projects and repositories, read from the provider~~
-5. Scenarios: read a feature, mark results, add, edit, regenerate
-6. Syncs: push webhooks, a job queue, AI writing scenarios
+5. ~~Scenarios: read a feature, mark results, add, edit~~
+6. Syncs: push webhooks, a job queue, AI writing scenarios, regenerate, `GET /api/projects/:projectId/syncs`
 7. Contact emails, and the frontend's services switched from mocks to this API
 
 Decided: Testick is a **GitHub App** (not an OAuth App). People sign in through it, it reads repositories with fine-grained read-only permissions, and push webhooks come from its installations. A person sees the repositories they can access on the installations of the app. The app's own ID and private key (`GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, already in the local `.env`) join `config.ts` in step 6, when syncs read code.
@@ -43,7 +44,7 @@ src/
   config.ts            every environment variable, checked with Zod at startup
   testServer.ts        test helper: fake config and the app on a free port (not built)
   lib/                 shared plumbing: logger, errors, rateLimit, openapi, supabase, database.types, crypto, github
-  features/<name>/     one area of the API contract (auth, contact, projects, later scenarios, syncs):
+  features/<name>/     one area of the API contract (auth, contact, projects, scenarios, later syncs):
     schemas.ts           Zod schemas for requests and responses, named as in the frontend's types.ts
     routes.ts            the router: each route's OpenAPI registration sits right above it
     service.ts           database and provider calls. No Express in here.
@@ -56,7 +57,7 @@ supabase/migrations/   the database schema, one SQL file per change, never edite
 
 - **Validate at the edge.** Every request body, param and query is parsed with its Zod schema in the handler (`Schema.parse(req.body)`). A `ZodError` becomes a 400 by itself. Never trust a value the client sent before that.
 - **Errors.** Throw `HttpError(status, message)` for the caller's mistakes, with a message written for people. Anything else is a 500 that is logged and never shown. Express 5 passes a rejected promise to the error handler: no try/catch just to forward it. The format is in `docs/architecture.md`.
-- **Sign-in.** A route behind sign-in starts with `const { user } = await requireSession(req)` (from `features/auth/session.ts`), declares `security: [{ [sessionCookie.name]: [] }]` in Swagger, and has a test that it answers 401 without a cookie. Other features may import `features/auth/session.ts`, `schemas.ts` and `tokens.ts`; nothing else from another feature.
+- **Sign-in.** A route behind sign-in starts with `const { user } = await requireSession(req)` (from `features/auth/session.ts`), declares `security: [{ [sessionCookie.name]: [] }]` in Swagger, and has a test that it answers 401 without a cookie. Other features may import `features/auth/session.ts`, `schemas.ts` and `tokens.ts`, and `features/projects/repositories.ts` (who may see a project) and `schemas.ts`; nothing else from another feature.
 - **GitHub as the person.** Every call with a person's token goes through `asGitHubUser(userId, call)` from `features/auth/tokens.ts`: it renews the token, and when GitHub no longer takes it, ends their sessions and answers 401. Never read `provider_tokens` anywhere else.
 - **404 for "not yours".** A thing the person may not see answers 404, exactly like one that does not exist, so the API never reveals what exists.
 - **Every route is in Swagger.** Register it with `registry.registerPath` directly above the route, using the same Zod schemas the handler parses. A route missing from `/api/docs` is unfinished.

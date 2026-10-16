@@ -453,6 +453,10 @@ export type Database = {
           tester_total: number
         }[]
       }
+      open_feature: {
+        Args: { p_feature_id: string; p_user_id: string }
+        Returns: string
+      }
       project_summaries: {
         Args: { p_repo_ids: string[]; p_user_id: string }
         Returns: {

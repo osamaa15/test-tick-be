@@ -9,6 +9,7 @@ import { config } from './config.js'
 import { authRouter } from './features/auth/routes.js'
 import { contactRouter } from './features/contact/routes.js'
 import { projectsRouter } from './features/projects/routes.js'
+import { scenariosRouter } from './features/scenarios/routes.js'
 import { handleErrors, notFound } from './lib/errors.js'
 import { logger } from './lib/logger.js'
 import { openApiDocument, registry } from './lib/openapi.js'
@@ -69,7 +70,7 @@ export function createApp() {
   })
 
   // Generous: the frontend polls every 3 seconds while a sync runs. Busy public routes add their own, lower limit.
-  app.use('/api', limitRequests(1000, 15), authRouter, contactRouter, projectsRouter)
+  app.use('/api', limitRequests(1000, 15), authRouter, contactRouter, projectsRouter, scenariosRouter)
 
   if (config.NODE_ENV !== 'production') {
     const document = openApiDocument()

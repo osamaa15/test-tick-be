@@ -55,6 +55,7 @@ Called with `supabase.rpc(...)`. Each takes the person (`p_user_id`) and, where 
 | `feature_summaries(p_user_id, p_project_ids)` | The current features of these projects, in the order they were found, with this person's New or Changed mark and the counts per role | `GET /api/projects/:projectId` | Step 4 |
 | `project_summaries(p_user_id, p_repo_ids)` | Each connected project among these repositories: its newest sync, its feature and new-feature counts, and its counts per role (its features' added up). Most recently synced first | Every projects route | Step 4 |
 | `connect_projects(p_user_id, p_repos)` | Makes the projects and each one's first `running` sync together. An existing project is left alone, and gets a sync only if it has none | `POST /api/projects` | Step 4 |
+| `open_feature(p_user_id, p_feature_id)` | Returns the feature's New or Changed mark for this person as it was, and clears it (records them as having seen it at the current sync) | `GET /api/projects/:projectId/features/:featureId` | Step 5 |
 
 ### How the API's ideas map to the tables
 
@@ -65,6 +66,7 @@ Called with `supabase.rpc(...)`. Each takes the person (`p_user_id`) and, where 
 - **The result** is three columns on `scenarios`, one per scenario for the whole team. A check keeps `verdict` and `marked_at` set or cleared together. A sync that finds a feature changed clears them.
 - **Counts** (`total`, `passed`, `failed` per role) are added up from `scenarios` for the current sync. When the next sync finishes, the previous current sync's `sync_features.scenarios` is filled with the counts as they stood, as `{"tester": {...}, "developer": {...}}`. It stays null while that sync is current.
 - **New or Changed** for a person: the current sync's `sync_features.change` for that feature, unless that person's `feature_views` row points at the current sync. Opening a feature upserts that row.
-- **Regenerating** deletes one role's `origin = 'ai'` scenarios of a feature and inserts new ones. `edited` and `manual` ones stay, with their results. It becomes a Postgres function with its endpoint in step 5. Finishing a sync becomes one in step 6.
+- **Regenerating** deletes one role's `origin = 'ai'` scenarios of a feature and inserts new ones. `edited` and `manual` ones stay, with their results. It becomes a Postgres function with its endpoint in step 6, beside the AI that writes the new ones. Finishing a sync becomes one in step 6 too.
+- **Editing** an `ai` scenario turns it `edited` and keeps its result. A result is set or cleared with `verdict`, `marked_by` and `marked_at` together; `marked_by` is the person who marked it.
 - **Order**: lists sort scenarios by `seq`, the order they were written in.
 - **Secrets at rest**: a session token is stored only as its hash, and provider tokens only sealed. Someone who reads the tables can neither sign in as anyone nor call GitHub as them. Selecting from `users` never brings tokens with it.

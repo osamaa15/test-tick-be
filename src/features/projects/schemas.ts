@@ -54,6 +54,10 @@ export const Project = z
   .meta({ id: 'Project' })
 export type Project = z.infer<typeof Project>
 
+export const ProjectRef = z
+  .object({ id: z.uuid(), name: z.string(), isLead: z.boolean() })
+  .meta({ id: 'ProjectRef', description: 'What pages about one project carry: its name, and whether the person leads it.' })
+
 export const FeatureChange = z.enum(['added', 'changed']).meta({ id: 'FeatureChange' })
 
 export const FeatureSummary = z
