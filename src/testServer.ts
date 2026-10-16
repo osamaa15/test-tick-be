@@ -18,6 +18,8 @@ Object.assign(process.env, {
   ).toString('base64'),
   GITHUB_WEBHOOK_SECRET: 'test-webhook-secret-0123456789',
   AI_API_KEY: 'test',
+  RESEND_API_KEY: 'test',
+  CONTACT_INBOX: 'team@example.com',
   TOKEN_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
 })
 

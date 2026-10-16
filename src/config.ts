@@ -30,6 +30,9 @@ const Env = z.object({
   AI_BASE_URL: z.url().default('https://generativelanguage.googleapis.com/v1beta/openai'),
   // Several, comma-separated: the next is tried when one is busy.
   AI_MODEL: z.string().min(1).default('gemini-3.6-flash,gemini-3.8-flash,gemini-3-flash-preview'),
+  RESEND_API_KEY: z.string().min(1),
+  CONTACT_INBOX: z.email(),
+  CONTACT_FROM: z.string().min(1).default('Testick <onboarding@resend.dev>'),
   TOKEN_ENCRYPTION_KEY: z
     .string()
     .refine((key) => Buffer.from(key, 'base64').length === 32, 'Must be 32 random bytes in base64. See .env.example.'),
