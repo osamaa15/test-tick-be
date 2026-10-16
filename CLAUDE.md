@@ -8,11 +8,12 @@ Built:
 
 - Step 1, the foundation. Express 5 + TypeScript, config checked at startup, security headers, CORS, rate limits, request logs, one error format, Swagger, graceful shutdown, tests, and `POST /api/contact` (stored, and since step 7 emailed to the team).
 - Step 2, the database: `users`, `projects`, `syncs`, `features`, `scenarios` (with the team's result), `sync_features` (history) and `feature_views` (New or Changed marks), pushed to the linked Supabase project. How they map to the API is in `docs/database.md`. Each later step adds the Postgres functions its endpoints need.
-- Step 3, sign-in: `GET /api/auth/github` and its callback (GitHub App user sign-in with a state cookie), `GET /api/session`, `POST /api/auth/sign-out`, `PATCH /api/me`. Sessions live in the `sessions` table behind an httpOnly cookie, and GitHub tokens are stored sealed (AES-256-GCM) in `provider_tokens`. Sign-in ends on the frontend's `/auth/callback`, which the frontend does not have yet.
+- Step 3, sign-in: `GET /api/auth/github` and its callback (GitHub App user sign-in with a state cookie), `GET /api/session`, `POST /api/auth/sign-out`, `PATCH /api/me`. Sessions live in the `sessions` table behind an httpOnly cookie, and GitHub tokens are stored sealed (AES-256-GCM) in `provider_tokens`. Sign-in ends on the frontend's `/auth/callback`.
 - Step 4, projects: `GET /api/repositories`, `POST /api/projects`, `GET /api/projects`, `GET /api/projects/:projectId`. Who may see a project, and who is a Lead, is read from GitHub with the person's own token (`features/auth/tokens.ts` renews it every 8 hours) and kept for a minute per person. Counts and New or Changed marks come from Postgres functions (`docs/database.md`). Connecting starts the project's first sync.
 - Step 5, scenarios: `GET /api/projects/:projectId/features/:featureId` (also clears the person's New or Changed mark), `PUT /api/scenarios/:scenarioId/result`, `POST /api/features/:featureId/scenarios`, `PATCH /api/scenarios/:scenarioId`. Access to a feature or scenario is its project's repository. `POST /api/features/:featureId/regenerate` came with step 6, because it needs the AI and the feature's code.
 - Step 6, syncs: the sync worker (`features/syncs/worker.ts`, started by `server.ts`) takes running syncs from the `syncs` table, reads the push as the GitHub App, has the AI find the features and write scenarios for new and changed ones, and ends the sync with `finish_sync`. `POST /api/webhooks/github` (signed) starts a sync on a push to the default branch. `POST /api/features/:featureId/regenerate` and `GET /api/projects/:projectId/syncs`. How it works is in `docs/architecture.md` (Syncs).
 - Step 7a, contact emails: each contact message is stored, then emailed to `CONTACT_INBOX` through Resend with the visitor as reply-to. A failed email is logged and loses nothing.
+- Step 7b, the frontend (`../frontend`) calls this API: its services use `/api`, which Vite forwards to `http://localhost:4000` in development, and sign-in returns to its `/auth/callback` page. Its fake backend is gone, so the frontend needs this API running.
 
 Roadmap, one step at a time:
 
@@ -22,7 +23,7 @@ Roadmap, one step at a time:
 4. ~~Projects and repositories, read from the provider~~
 5. ~~Scenarios: read a feature, mark results, add, edit~~
 6. ~~Syncs: push webhooks, a job queue, AI writing scenarios, regenerate, `GET /api/projects/:projectId/syncs`~~
-7. Contact emails, and the frontend's services switched from mocks to this API
+7. ~~Contact emails, and the frontend's services switched from mocks to this API~~
 
 Decided: Testick is a **GitHub App** (not an OAuth App). People sign in through it, it reads repositories with fine-grained read-only permissions, and push webhooks come from its installations. A person sees the repositories they can access on the installations of the app. Syncs read code as the app itself (`GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`), with installation tokens scoped to one repository, read-only. Webhooks need the app's webhook switched on, with the Push event (README).
 
