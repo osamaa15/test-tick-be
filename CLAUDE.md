@@ -32,7 +32,7 @@ Decided: the AI is **Gemini** (`gemini-3.6-flash`, falling back to `gemini-3.8-f
 
 Decided: **Resend** sends email (free tier; `onboarding@resend.dev` until a domain is verified there).
 
-Not decided yet (ask the user when the step comes): hosting.
+Not decided yet: hosting. The frontend is on Vercel; this API runs locally until the MVP is complete, then the user chooses a host with its cost (ask then). Hosting it means a rewrite of `/api/:path*` to it in the frontend's `vercel.json`, and the GitHub App's callback and webhook URLs pointed at it.
 
 Stack: Node 22, Express 5, TypeScript, Zod 4 (validation and OpenAPI), Supabase (Postgres) through `@supabase/supabase-js`, pino logs, helmet, express-rate-limit, swagger-ui-express, `node:test` through tsx, oxlint, `tar` (reads repository archives). The AI is called with `fetch`, without an SDK. Versions are in `package.json`.
 
