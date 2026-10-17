@@ -228,6 +228,8 @@ export type Database = {
       }
       scenarios: {
         Row: {
+          assigned_at: string | null
+          assigned_to: string | null
           created_at: string
           expected: string
           feature_id: string
@@ -244,6 +246,8 @@ export type Database = {
           verdict: string | null
         }
         Insert: {
+          assigned_at?: string | null
+          assigned_to?: string | null
           created_at?: string
           expected: string
           feature_id: string
@@ -260,6 +264,8 @@ export type Database = {
           verdict?: string | null
         }
         Update: {
+          assigned_at?: string | null
+          assigned_to?: string | null
           created_at?: string
           expected?: string
           feature_id?: string
@@ -276,6 +282,13 @@ export type Database = {
           verdict?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "scenarios_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "scenarios_feature_id_fkey"
             columns: ["feature_id"]

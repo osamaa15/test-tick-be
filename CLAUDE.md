@@ -15,6 +15,7 @@ Built:
 - Step 7a, contact emails: each contact message is stored, then emailed to `CONTACT_INBOX` through Resend with the visitor as reply-to. A failed email is logged and loses nothing.
 - After step 7, a used-up Gemini day: a model whose daily requests are used up is skipped, and when all are, syncs and Regenerate stop at once with a clear message instead of retrying for minutes. The server prefers IPv4, because some networks reset IPv6 connections to Gemini.
 - After step 7, the rest of the product spec: `DELETE /api/scenarios/:scenarioId`, Sync now (`POST /api/projects/:projectId/syncs`, a sync as a push starts one), `POST /api/auth/disconnect` (takes back the GitHub authorization, forgets the tokens, ends every session) and `DELETE /api/me` (disconnects, then deletes the account; their results stay for the team).
+- The board: `GET /api/projects/:projectId/board` (every scenario of the current features) and `PUT /api/scenarios/:scenarioId/status` (`to-do`, `in-progress`, `passed`, `failed`). In progress is a scenario someone took (`scenarios.assigned_to`) and nobody marked. Third-party boards (Jira, Trello, Asana) are for later.
 - Step 7b, the frontend (`../frontend`) calls this API: its services use `/api`, which Vite forwards to `http://localhost:4000` in development, and sign-in returns to its `/auth/callback` page. Its fake backend is gone, so the frontend needs this API running.
 
 Roadmap, one step at a time:

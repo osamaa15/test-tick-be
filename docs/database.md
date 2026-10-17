@@ -40,7 +40,7 @@ Without the CLI, a migration can also be pasted into the Supabase SQL editor. Th
 | `projects` | Connected repositories: provider id, owner, name, visibility, default branch, who connected it, and `resync` (a push came while a sync ran; step 6) | Step 2 |
 | `syncs` | Every run that read a push: status, branch, commit, `failure` (only when failed), start and finish. Also the job queue: `claimed_at` and `attempts` (step 6) | Step 2 |
 | `features` | What syncs found in a project: name, one-sentence description, and (step 6) the `paths` that implement it with a `code_hash` of their contents, to tell when it changed | Step 2 |
-| `scenarios` | The test cases, per feature and role, with origin (`ai`, `edited`, `manual`) and the team's result (`verdict`, `marked_by`, `marked_at`) | Step 2 |
+| `scenarios` | The test cases, per feature and role, with origin (`ai`, `edited`, `manual`) and the team's result (`verdict`, `marked_by`, `marked_at`), and who took it on the board (`assigned_to`, `assigned_at`, since the board) | Step 2 |
 | `sync_features` | Every feature as each finished sync left it: what the sync did to it, and its frozen counts | Step 2 |
 | `feature_views` | Which sync's New or Changed mark each person has cleared, per feature | Step 2 |
 | `sessions` | One per signed-in browser: the SHA-256 of the cookie's token, the person, when it expires (30 days) | Step 3 |

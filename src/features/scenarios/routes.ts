@@ -4,17 +4,29 @@ import { errorResponses, registry, sessionCookie } from '../../lib/openapi.js'
 import { limitRequests } from '../../lib/rateLimit.js'
 import { requireSession } from '../auth/session.js'
 import {
+  Board,
   FeatureDetail,
   FeatureIdParams,
   FeatureParams,
   NewScenario,
+  ProjectParams,
   RegenerateInput,
   ResultInput,
   Scenario,
   ScenarioInput,
   ScenarioParams,
+  StatusInput,
 } from './schemas.js'
-import { addScenario, deleteScenario, editScenario, getFeature, regenerateScenarios, setResult } from './service.js'
+import {
+  addScenario,
+  deleteScenario,
+  editScenario,
+  getBoard,
+  getFeature,
+  moveScenario,
+  regenerateScenarios,
+  setResult,
+} from './service.js'
 
 export const scenariosRouter = Router()
 
@@ -110,6 +122,47 @@ scenariosRouter.patch('/scenarios/:scenarioId', writeLimit, async (req, res) => 
   const { user } = await requireSession(req)
   const { scenarioId } = ScenarioParams.parse(req.params)
   res.json(await editScenario(user.id, scenarioId, ScenarioInput.parse(req.body)))
+})
+
+registry.registerPath({
+  method: 'get',
+  path: '/api/projects/{projectId}/board',
+  tags: ['scenarios'],
+  summary: "A project's board",
+  description:
+    "Every scenario of the project's current features, both roles, and those features by name. A scenario's column follows from its `result` and `assignee` (`BoardStatus`).",
+  security,
+  request: { params: ProjectParams },
+  responses: {
+    200: { description: 'The board.', content: { 'application/json': { schema: Board } } },
+    ...errorResponses(400, 401, 404, 429),
+  },
+})
+
+scenariosRouter.get('/projects/:projectId/board', async (req, res) => {
+  const { user } = await requireSession(req)
+  res.json(await getBoard(user.id, ProjectParams.parse(req.params).projectId))
+})
+
+registry.registerPath({
+  method: 'put',
+  path: '/api/scenarios/{scenarioId}/status',
+  tags: ['scenarios'],
+  summary: 'Move a scenario on the board',
+  description:
+    '`passed` and `failed` mark its result as the caller, keeping who took it. `in-progress` takes it for the caller and clears the result. `to-do` frees it and clears the result. For the whole team.',
+  security,
+  request: {
+    params: ScenarioParams,
+    body: { required: true, content: { 'application/json': { schema: StatusInput } } },
+  },
+  responses: { 200: scenarioResponse('The scenario as saved.'), ...errorResponses(400, 401, 404, 429) },
+})
+
+scenariosRouter.put('/scenarios/:scenarioId/status', writeLimit, async (req, res) => {
+  const { user } = await requireSession(req)
+  const { scenarioId } = ScenarioParams.parse(req.params)
+  res.json(await moveScenario(user.id, scenarioId, StatusInput.parse(req.body).status))
 })
 
 registry.registerPath({

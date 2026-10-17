@@ -23,6 +23,10 @@ export const ScenarioResult = z
   })
   .meta({ id: 'ScenarioResult', description: "The team's verdict: one per scenario, shared by everyone on the project." })
 
+export const Assignee = z
+  .object({ id: z.string(), name: z.string(), avatarUrl: z.string().nullable() })
+  .meta({ id: 'Assignee', description: 'Who took a scenario on the board to test it.' })
+
 export const Scenario = z
   .object({
     id: z.uuid(),
@@ -35,6 +39,7 @@ export const Scenario = z
     expected: z.string(),
     origin: ScenarioOrigin,
     result: ScenarioResult.nullable().meta({ description: 'Null while nobody has marked it.' }),
+    assignee: Assignee.nullable().meta({ description: 'Null while nobody has taken it on the board.' }),
   })
   .meta({ id: 'Scenario' })
 export type Scenario = z.infer<typeof Scenario>
@@ -73,6 +78,27 @@ export const FeatureDetail = z
   .meta({ id: 'FeatureDetail' })
 export type FeatureDetail = z.infer<typeof FeatureDetail>
 
+export const BoardStatus = z
+  .enum(['to-do', 'in-progress', 'passed', 'failed'])
+  .meta({
+    id: 'BoardStatus',
+    description:
+      'Where a scenario stands on the board. passed and failed are its result; in-progress means someone took it and nobody marked it yet.',
+  })
+export type BoardStatus = z.infer<typeof BoardStatus>
+
+export const StatusInput = z.object({ status: BoardStatus }).meta({ id: 'StatusInput' })
+
+export const Board = z
+  .object({
+    project: ProjectRef,
+    features: z.array(z.object({ id: z.uuid(), name: z.string() })).meta({ description: 'The current features, by name.' }),
+    scenarios: z.array(Scenario).meta({ description: 'Every scenario of the current features, both roles.' }),
+  })
+  .meta({ id: 'Board' })
+export type Board = z.infer<typeof Board>
+
+export const ProjectParams = z.object({ projectId: z.uuid() })
 export const FeatureParams = z.object({ projectId: z.uuid(), featureId: z.uuid() })
 export const FeatureIdParams = z.object({ featureId: z.uuid() })
 export const ScenarioParams = z.object({ scenarioId: z.uuid() })

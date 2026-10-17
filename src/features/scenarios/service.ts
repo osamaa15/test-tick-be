@@ -4,20 +4,25 @@ import { HttpError } from '../../lib/errors.js'
 import { installationToken, readFiles } from '../../lib/githubApp.js'
 import { supabase } from '../../lib/supabase.js'
 import { Role } from '../auth/schemas.js'
-import { accessibleRepositories } from '../projects/repositories.js'
+import { accessibleRepositories, repositoryOfProject } from '../projects/repositories.js'
 import { FeatureChange } from '../projects/schemas.js'
 import {
   ScenarioKind,
   ScenarioOrigin,
   Verdict,
+  type Board,
+  type BoardStatus,
   type FeatureDetail,
   type Scenario,
   type ScenarioInput,
 } from './schemas.js'
 import { writeScenarios } from './writer.js'
 
-const SCENARIO = '*, marker:users!marked_by(id, name)'
-type ScenarioRow = Tables<'scenarios'> & { marker: { id: string; name: string } | null }
+const SCENARIO = '*, marker:users!marked_by(id, name), assignee:users!assigned_to(id, name, avatar_url)'
+type ScenarioRow = Tables<'scenarios'> & {
+  marker: { id: string; name: string } | null
+  assignee: { id: string; name: string; avatar_url: string | null } | null
+}
 
 export const toScenario = (row: ScenarioRow): Scenario => ({
   id: row.id,
@@ -38,6 +43,7 @@ export const toScenario = (row: ScenarioRow): Scenario => ({
           markedAt: row.marked_at,
         }
       : null,
+  assignee: row.assignee && { id: row.assignee.id, name: row.assignee.name, avatarUrl: row.assignee.avatar_url },
 })
 
 /** What a person typed, tidied: blank preconditions become null and empty steps go. The schema already trimmed it. */
@@ -120,6 +126,55 @@ export async function setResult(userId: string, scenarioId: string, verdict: Ver
       ? { verdict, marked_by: userId, marked_at: new Date().toISOString() }
       : { verdict: null, marked_by: null, marked_at: null },
   )
+}
+
+/**
+ * What moving a scenario on the board changes. Passed and failed are its result, and keep who took it. In progress
+ * takes it for the person and clears the result. To do frees it and clears the result.
+ */
+export function statusChanges(status: BoardStatus, userId: string, now: string): TablesUpdate<'scenarios'> {
+  const unmarked = { verdict: null, marked_by: null, marked_at: null }
+  if (status === 'to-do') return { ...unmarked, assigned_to: null, assigned_at: null }
+  if (status === 'in-progress') return { ...unmarked, assigned_to: userId, assigned_at: now }
+  return { verdict: status, marked_by: userId, marked_at: now }
+}
+
+/** Moves a scenario on the board, for the whole team. */
+export async function moveScenario(userId: string, scenarioId: string, status: BoardStatus): Promise<Scenario> {
+  await findScenario(userId, scenarioId)
+  return saveScenario(scenarioId, statusChanges(status, userId, new Date().toISOString()))
+}
+
+/**
+ * The board: every scenario of the project's current features (those of its newest sync that finished, as on the
+ * project page), both roles, and those features by name.
+ */
+export async function getBoard(userId: string, projectId: string): Promise<Board> {
+  const repository = await repositoryOfProject(userId, projectId)
+  const { data: sync, error } = await supabase
+    .from('syncs')
+    .select('sync_features(feature:features(id, name))')
+    .eq('project_id', projectId)
+    .eq('status', 'succeeded')
+    .order('started_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) throw error
+  const features = (sync?.sync_features ?? []).map((row) => row.feature).sort((a, b) => a.name.localeCompare(b.name))
+  const scenarios = await supabase
+    .from('scenarios')
+    .select(SCENARIO)
+    .in(
+      'feature_id',
+      features.map((feature) => feature.id),
+    )
+    .order('seq')
+  if (scenarios.error) throw scenarios.error
+  return {
+    project: { id: projectId, name: repository.name, isLead: repository.isLead },
+    features,
+    scenarios: scenarios.data.map(toScenario),
+  }
 }
 
 /** Changes the text. An AI scenario becomes `edited`; the result stays. */
