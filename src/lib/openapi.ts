@@ -24,6 +24,7 @@ const ErrorBody = z
 const errorDescriptions = {
   400: 'The request is not valid. `issues` says which fields are wrong.',
   401: 'Not signed in, or the session has expired.',
+  403: 'Signed in, but not allowed to do this.',
   404: 'Not found, or not yours to see.',
   429: 'Too many requests. The `RateLimit` header says when to try again.',
 } as const

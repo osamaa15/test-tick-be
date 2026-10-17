@@ -105,3 +105,14 @@ export async function connectRepositories(userId: string, repositoryIds: string[
   const projects = await projectsFor(userId, repositories, ids)
   return ids.flatMap((id) => projects.find((project) => project.repository.id === id) ?? [])
 }
+
+/**
+ * Removes a project from Testick, with everything Testick stored for it: syncs, features, scenarios and results.
+ * The repository on GitHub is untouched. Only a Lead may, because it ends the project for the whole team.
+ */
+export async function removeProject(userId: string, projectId: string) {
+  const repository = await repositoryOfProject(userId, projectId)
+  if (!repository.isLead) throw new HttpError(403, 'Only a Lead of this repository (admin or maintain access) can remove it.')
+  const { error } = await supabase.from('projects').delete().eq('id', projectId)
+  if (error) throw error
+}

@@ -4,7 +4,7 @@ import { errorResponses, registry, sessionCookie } from '../../lib/openapi.js'
 import { limitRequests } from '../../lib/rateLimit.js'
 import { requireSession } from '../auth/session.js'
 import { ConnectInput, Project, ProjectDetail, ProjectParams, Repository } from './schemas.js'
-import { connectRepositories, getProject, listProjects, listRepositories } from './service.js'
+import { connectRepositories, getProject, listProjects, listRepositories, removeProject } from './service.js'
 
 export const projectsRouter = Router()
 
@@ -46,6 +46,24 @@ registry.registerPath({
 projectsRouter.get('/projects/:projectId', async (req, res) => {
   const { user } = await requireSession(req)
   res.json(await getProject(user.id, ProjectParams.parse(req.params).projectId))
+})
+
+registry.registerPath({
+  method: 'delete',
+  path: '/api/projects/{projectId}',
+  tags: ['projects'],
+  summary: 'Remove a project from Testick',
+  description:
+    'Deletes the project and everything Testick stored for it: syncs, features, scenarios and results, for the whole team. The repository on GitHub is untouched, and it can be connected again later. Only a Lead (admin or maintain access) may: anyone else gets 403. Limited to 10 requests per 15 minutes per caller.',
+  security,
+  request: { params: ProjectParams },
+  responses: { 204: { description: 'Removed.' }, ...errorResponses(400, 401, 403, 404, 429) },
+})
+
+projectsRouter.delete('/projects/:projectId', limitRequests(10, 15), async (req, res) => {
+  const { user } = await requireSession(req)
+  await removeProject(user.id, ProjectParams.parse(req.params).projectId)
+  res.status(204).end()
 })
 
 registry.registerPath({
