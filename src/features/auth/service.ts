@@ -2,7 +2,7 @@ import { supabase } from '../../lib/supabase.js'
 import { exchangeCode, getGitHubUser } from './github.js'
 import type { Role, Session } from './schemas.js'
 import { toSession } from './session.js'
-import { saveTokens } from './tokens.js'
+import { forgetGitHub, saveTokens } from './tokens.js'
 
 /**
  * Signs a person in with the code GitHub sent back. Their profile is refreshed (their role is kept) and
@@ -30,6 +30,19 @@ export async function signInWithGitHub(code: string): Promise<string> {
 
   await saveTokens(user.id, tokens)
   return user.id
+}
+
+/** Disconnects the provider: Testick stops reading on the person's behalf, and every session of theirs ends. */
+export const disconnectProvider = (userId: string) => forgetGitHub(userId)
+
+/**
+ * Deletes the person's Testick account. Their results stay for the team, marked by a former teammate, and the
+ * projects stay for everyone else with access to the repositories.
+ */
+export async function deleteAccount(userId: string) {
+  await forgetGitHub(userId)
+  const { error } = await supabase.from('users').delete().eq('id', userId)
+  if (error) throw error
 }
 
 /** Saves the person's own role, and returns their session with it. */

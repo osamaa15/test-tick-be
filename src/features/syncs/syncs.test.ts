@@ -14,9 +14,10 @@ import { planFeatures } from './plan.js'
 
 const base = await startTestServer()
 
-test('the sync history needs a session', async () => {
-  const res = await fetch(`${base}/api/projects/7f9c1d2e-0000-4000-8000-000000000000/syncs`)
-  assert.equal(res.status, 401)
+test('the sync history and Sync now need a session', async () => {
+  const path = `${base}/api/projects/7f9c1d2e-0000-4000-8000-000000000000/syncs`
+  assert.equal((await fetch(path)).status, 401)
+  assert.equal((await fetch(path, { method: 'POST' })).status, 401)
 })
 
 const deliver = (event: string, payload: object, signature?: string) => {

@@ -4,9 +4,10 @@ import { z } from 'zod'
 import { config } from '../../config.js'
 import { HttpError } from '../../lib/errors.js'
 import { errorResponses, registry, sessionCookie } from '../../lib/openapi.js'
+import { limitRequests } from '../../lib/rateLimit.js'
 import { requireSession } from '../auth/session.js'
 import { ProjectParams, SyncHistory } from './schemas.js'
-import { getSyncHistory, requestSync } from './service.js'
+import { getSyncHistory, requestSync, syncNow } from './service.js'
 import { wakeSyncWorker } from './worker.js'
 
 export const syncsRouter = Router()
@@ -29,6 +30,28 @@ registry.registerPath({
 syncsRouter.get('/projects/:projectId/syncs', async (req, res) => {
   const { user } = await requireSession(req)
   res.json(await getSyncHistory(user.id, ProjectParams.parse(req.params).projectId))
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/api/projects/{projectId}/syncs',
+  tags: ['syncs'],
+  summary: 'Sync now',
+  description:
+    "Starts a sync of the project's default branch at its latest commit, as a push does. While one is running, another follows it. A commit the current sync already read changes nothing and costs no AI. Limited to 10 an hour per caller, because a sync may use the AI.",
+  security: [{ [sessionCookie.name]: [] }],
+  request: { params: ProjectParams },
+  responses: {
+    202: { description: 'The sync is on its way. Read the project to follow it.' },
+    ...errorResponses(400, 401, 404, 429),
+  },
+})
+
+syncsRouter.post('/projects/:projectId/syncs', limitRequests(10, 60), async (req, res) => {
+  const { user } = await requireSession(req)
+  await syncNow(user.id, ProjectParams.parse(req.params).projectId)
+  wakeSyncWorker()
+  res.status(202).end()
 })
 
 /** Mounted before the JSON parser: the signature is checked over the body exactly as GitHub sent it. */

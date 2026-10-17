@@ -6,6 +6,13 @@ import { SyncFeature, type Sync, type SyncHistory } from './schemas.js'
 
 const SyncFeatures = z.array(SyncFeature)
 
+/** Sync now: a sync of the project's default branch at its latest commit, as a push starts. One running is followed by another. */
+export async function syncNow(userId: string, projectId: string) {
+  const repository = await repositoryOfProject(userId, projectId)
+  const { error } = await supabase.rpc('request_sync', { p_project_id: projectId, p_branch: repository.defaultBranch })
+  if (error) throw error
+}
+
 /** A project's syncs, newest first, each with its features and counts as it left them. */
 export async function getSyncHistory(userId: string, projectId: string): Promise<SyncHistory> {
   const repository = await repositoryOfProject(userId, projectId)

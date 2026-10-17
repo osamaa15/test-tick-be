@@ -128,6 +128,13 @@ export async function editScenario(userId: string, scenarioId: string, input: Sc
   return saveScenario(scenarioId, { ...cleanInput(input), origin: origin === 'ai' ? 'edited' : origin })
 }
 
+/** Deletes a scenario for the whole team, with its result, whatever wrote it. */
+export async function deleteScenario(userId: string, scenarioId: string) {
+  await findScenario(userId, scenarioId)
+  const { error } = await supabase.from('scenarios').delete().eq('id', scenarioId)
+  if (error) throw error
+}
+
 /**
  * Has the AI rewrite one role's AI scenarios from the feature's code at the current sync, and returns that role's
  * scenarios afterwards. Edited and hand-written ones stay as they are, with their results.

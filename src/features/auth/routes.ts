@@ -6,7 +6,7 @@ import { errorResponses, registry, sessionCookie } from '../../lib/openapi.js'
 import { limitRequests } from '../../lib/rateLimit.js'
 import { authorizeUrl } from './github.js'
 import { RoleInput, Session } from './schemas.js'
-import { setRole, signInWithGitHub } from './service.js'
+import { deleteAccount, disconnectProvider, setRole, signInWithGitHub } from './service.js'
 import { cookieOptions, currentSession, endSession, requireSession, SESSION_COOKIE, startSession } from './session.js'
 
 export const authRouter = Router()
@@ -117,4 +117,38 @@ registry.registerPath({
 authRouter.patch('/me', async (req, res) => {
   const { user } = await requireSession(req)
   res.json(await setRole(user.id, RoleInput.parse(req.body).role))
+})
+
+registry.registerPath({
+  method: 'post',
+  path: '/api/auth/disconnect',
+  tags: ['auth'],
+  summary: 'Disconnect the provider',
+  description:
+    "Takes back the person's authorization of Testick on GitHub, forgets their GitHub tokens and ends all their sessions, on every browser. Their Testick account stays: signing in again connects it again.",
+  security: [{ [sessionCookie.name]: [] }],
+  responses: { 204: { description: 'Disconnected and signed out.' }, ...errorResponses(401, 429) },
+})
+
+authRouter.post('/auth/disconnect', limitRequests(10, 15), async (req, res) => {
+  const { user } = await requireSession(req)
+  await disconnectProvider(user.id)
+  res.clearCookie(SESSION_COOKIE, cookieOptions).status(204).end()
+})
+
+registry.registerPath({
+  method: 'delete',
+  path: '/api/me',
+  tags: ['auth'],
+  summary: "Delete the person's Testick account",
+  description:
+    'Disconnects GitHub as `/api/auth/disconnect` does, then deletes the account and what is only theirs (New or Changed marks). Results they marked stay for the team, shown as marked by a former teammate. Projects stay for everyone else with access.',
+  security: [{ [sessionCookie.name]: [] }],
+  responses: { 204: { description: 'Deleted and signed out.' }, ...errorResponses(401, 429) },
+})
+
+authRouter.delete('/me', limitRequests(10, 15), async (req, res) => {
+  const { user } = await requireSession(req)
+  await deleteAccount(user.id)
+  res.clearCookie(SESSION_COOKIE, cookieOptions).status(204).end()
 })

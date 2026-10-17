@@ -14,7 +14,7 @@ import {
   ScenarioInput,
   ScenarioParams,
 } from './schemas.js'
-import { addScenario, editScenario, getFeature, regenerateScenarios, setResult } from './service.js'
+import { addScenario, deleteScenario, editScenario, getFeature, regenerateScenarios, setResult } from './service.js'
 
 export const scenariosRouter = Router()
 
@@ -110,6 +110,23 @@ scenariosRouter.patch('/scenarios/:scenarioId', writeLimit, async (req, res) => 
   const { user } = await requireSession(req)
   const { scenarioId } = ScenarioParams.parse(req.params)
   res.json(await editScenario(user.id, scenarioId, ScenarioInput.parse(req.body)))
+})
+
+registry.registerPath({
+  method: 'delete',
+  path: '/api/scenarios/{scenarioId}',
+  tags: ['scenarios'],
+  summary: 'Delete a scenario',
+  description: 'For the whole team, with its result, whether the AI wrote it, someone edited it or added it by hand.',
+  security,
+  request: { params: ScenarioParams },
+  responses: { 204: { description: 'Deleted.' }, ...errorResponses(400, 401, 404, 429) },
+})
+
+scenariosRouter.delete('/scenarios/:scenarioId', writeLimit, async (req, res) => {
+  const { user } = await requireSession(req)
+  await deleteScenario(user.id, ScenarioParams.parse(req.params).scenarioId)
+  res.status(204).end()
 })
 
 registry.registerPath({

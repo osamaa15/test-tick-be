@@ -42,6 +42,25 @@ export const exchangeCode = (code: string) => requestTokens({ code, redirect_uri
 export const refreshTokens = (refreshToken: string) =>
   requestTokens({ grant_type: 'refresh_token', refresh_token: refreshToken })
 
+/** Takes back the person's authorization of the app on GitHub, which ends every token it gave Testick for them. */
+export async function revokeAuthorization(accessToken: string) {
+  const res = await fetch(`https://api.github.com/applications/${config.GITHUB_CLIENT_ID}/grant`, {
+    method: 'DELETE',
+    headers: {
+      accept: 'application/vnd.github+json',
+      authorization: `Basic ${Buffer.from(`${config.GITHUB_CLIENT_ID}:${config.GITHUB_CLIENT_SECRET}`).toString('base64')}`,
+      'content-type': 'application/json',
+      'user-agent': 'Testick',
+      'x-github-api-version': '2022-11-28',
+    },
+    body: JSON.stringify({ access_token: accessToken }),
+    signal: AbortSignal.timeout(10_000),
+  })
+  await res.body?.cancel()
+  // 404: the authorization is already gone.
+  if (!res.ok && res.status !== 404) throw new GitHubError(`GitHub /applications/grant answered ${res.status}`, res.status)
+}
+
 const GitHubUser = z.object({ id: z.number(), login: z.string(), name: z.string().nullable(), avatar_url: z.string() })
 
 /** The signed-in person's profile. */

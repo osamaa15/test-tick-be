@@ -15,6 +15,7 @@ test('every scenarios route needs a session, before the body is read', async () 
     fetch(`${base}/api/features/${id}/scenarios`, json('POST')),
     fetch(`${base}/api/scenarios/${id}`, json('PATCH')),
     fetch(`${base}/api/features/${id}/regenerate`, json('POST')),
+    fetch(`${base}/api/scenarios/${id}`, { method: 'DELETE' }),
   ]
   for (const res of await Promise.all(calls)) assert.equal(res.status, 401)
 })
@@ -25,6 +26,7 @@ test('docs list the scenarios routes', async () => {
   assert.ok('put' in (paths['/api/scenarios/{scenarioId}/result'] ?? {}))
   assert.ok('post' in (paths['/api/features/{featureId}/scenarios'] ?? {}))
   assert.ok('patch' in (paths['/api/scenarios/{scenarioId}'] ?? {}))
+  assert.ok('delete' in (paths['/api/scenarios/{scenarioId}'] ?? {}))
 })
 
 test('a scenario is trimmed, loses empty steps and blank preconditions', () => {

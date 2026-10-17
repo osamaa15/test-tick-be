@@ -1,8 +1,9 @@
 import { seal, unseal } from '../../lib/crypto.js'
 import { HttpError } from '../../lib/errors.js'
 import { GitHubError } from '../../lib/github.js'
+import { logger } from '../../lib/logger.js'
 import { supabase } from '../../lib/supabase.js'
-import { refreshTokens, type Tokens } from './github.js'
+import { refreshTokens, revokeAuthorization, type Tokens } from './github.js'
 
 const expiresAt = (seconds: number | undefined) =>
   seconds === undefined ? null : new Date(Date.now() + seconds * 1000).toISOString()
@@ -72,6 +73,23 @@ async function accessToken(userId: string): Promise<string> {
     refreshing.set(userId, pending)
   }
   return pending
+}
+
+/**
+ * Ends Testick's access to GitHub as the person: takes back their authorization of the app on GitHub, then forgets
+ * their tokens and ends every session of theirs. GitHub being unreachable is logged and does not stop the rest: with
+ * the tokens gone Testick cannot act for them, and they can still remove the app on GitHub themselves.
+ */
+export async function forgetGitHub(userId: string) {
+  await asGitHubUser(userId, revokeAuthorization).catch((err: unknown) =>
+    logger.warn({ err, userId }, 'could not take back the GitHub authorization'),
+  )
+  const [tokens, sessions] = await Promise.all([
+    supabase.from('provider_tokens').delete().eq('user_id', userId),
+    supabase.from('sessions').delete().eq('user_id', userId),
+  ])
+  if (tokens.error) throw tokens.error
+  if (sessions.error) throw sessions.error
 }
 
 /**

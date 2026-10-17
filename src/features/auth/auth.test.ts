@@ -19,6 +19,11 @@ test('saving a role needs a session', async () => {
   assert.equal(res.status, 401)
 })
 
+test('disconnecting and deleting an account need a session', async () => {
+  assert.equal((await fetch(`${base}/api/auth/disconnect`, { method: 'POST' })).status, 401)
+  assert.equal((await fetch(`${base}/api/me`, { method: 'DELETE' })).status, 401)
+})
+
 test('signing out with no session is fine', async () => {
   const res = await fetch(`${base}/api/auth/sign-out`, { method: 'POST' })
   assert.equal(res.status, 204)
