@@ -1,8 +1,8 @@
 import type { Database } from '../../lib/database.types.js'
 import { HttpError } from '../../lib/errors.js'
 import { supabase } from '../../lib/supabase.js'
-import { accessibleRepositories, repositoryOfProject, type AccessibleRepository } from './repositories.js'
-import { FeatureChange, SyncStatus, type Project, type ProjectDetail, type Repository } from './schemas.js'
+import { accessibleRepositories, branchesOf, repositoryOfProject, type AccessibleRepository } from './repositories.js'
+import { FeatureChange, SyncStatus, type ConnectInput, type Project, type ProjectDetail, type Repository } from './schemas.js'
 
 type Functions = Database['public']['Functions']
 type ProjectRow = Functions['project_summaries']['Returns'][number]
@@ -23,12 +23,13 @@ async function projectsFor(userId: string, repositories: Map<string, AccessibleR
   return data.flatMap((row): Project[] => {
     const repository = repositories.get(row.provider_repo_id)
     if (!repository) return []
-    const { id, provider, owner, name, visibility, defaultBranch, isLead } = repository
+    const { id, provider, owner, name, visibility, isLead } = repository
     return [
       {
         id: row.id,
         // The provider's names, not the ones stored when it was connected: they stay right after a rename.
-        repository: { id, provider, owner, name, visibility, defaultBranch },
+        repository: { id, provider, owner, name, visibility },
+        branch: row.branch,
         featureCount: row.feature_count,
         newFeatureCount: row.new_feature_count,
         scenarios: countsOf(row),
@@ -80,15 +81,30 @@ export async function listRepositories(userId: string): Promise<Repository[]> {
     .sort((a, b) => b.pushedAt.localeCompare(a.pushedAt))
 }
 
+/** The names of a repository's branches, its default branch first, for choosing the one Testick reads. */
+export async function listBranches(userId: string, repositoryId: string): Promise<string[]> {
+  const repository = (await accessibleRepositories(userId)).get(repositoryId)
+  if (!repository) throw new HttpError(404, 'Not found.')
+  const first = (branch: string) => Number(branch === repository.defaultBranch)
+  return (await branchesOf(userId, repository)).sort((a, b) => first(b) - first(a) || a.localeCompare(b))
+}
+
 /**
- * Connects repositories as projects, each starting its first sync, and returns them in the order asked.
- * One already connected is returned as it is. One the person cannot access is a 404, and nothing is written.
+ * Connects repositories as projects, each reading the branch chosen for it and starting its first sync, and returns
+ * them in the order asked. One already connected is returned as it is, with its own branch. One the person cannot
+ * access is a 404, and a branch the repository does not have is a 400; then nothing is written.
  */
-export async function connectRepositories(userId: string, repositoryIds: string[]): Promise<Project[]> {
-  const ids = [...new Set(repositoryIds)]
+export async function connectRepositories(userId: string, asked: ConnectInput['repositories']): Promise<Project[]> {
+  const branchOf = new Map(asked.map(({ id, branch }) => [id, branch]))
+  const ids = [...branchOf.keys()]
   const repositories = await accessibleRepositories(userId)
   const chosen = ids.flatMap((id) => repositories.get(id) ?? [])
   if (chosen.length !== ids.length) throw new HttpError(404, 'Not found.')
+  const unknown = await Promise.all(
+    chosen.map(async (repo) => ((await branchesOf(userId, repo)).includes(branchOf.get(repo.id) ?? '') ? [] : [repo])),
+  )
+  const [wrong] = unknown.flat()
+  if (wrong) throw new HttpError(400, `${wrong.name} has no branch called “${branchOf.get(wrong.id)}”.`)
 
   const { error } = await supabase.rpc('connect_projects', {
     p_user_id: userId,
@@ -97,7 +113,7 @@ export async function connectRepositories(userId: string, repositoryIds: string[
       owner: repo.owner,
       name: repo.name,
       visibility: repo.visibility,
-      default_branch: repo.defaultBranch,
+      branch: branchOf.get(repo.id),
     })),
   })
   if (error) throw error

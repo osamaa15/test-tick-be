@@ -146,9 +146,9 @@ export type Database = {
       }
       projects: {
         Row: {
+          branch: string
           connected_by: string | null
           created_at: string
-          default_branch: string
           id: string
           name: string
           owner: string
@@ -158,9 +158,9 @@ export type Database = {
           visibility: string
         }
         Insert: {
+          branch: string
           connected_by?: string | null
           created_at?: string
-          default_branch: string
           id?: string
           name: string
           owner: string
@@ -170,9 +170,9 @@ export type Database = {
           visibility: string
         }
         Update: {
+          branch?: string
           connected_by?: string | null
           created_at?: string
-          default_branch?: string
           id?: string
           name?: string
           owner?: string
@@ -519,6 +519,7 @@ export type Database = {
       project_summaries: {
         Args: { p_repo_ids: string[]; p_user_id: string }
         Returns: {
+          branch: string
           developer_failed: number
           developer_passed: number
           developer_total: number
@@ -538,10 +539,7 @@ export type Database = {
         Args: { p_feature_id: string; p_role: string; p_scenarios: Json }
         Returns: undefined
       }
-      request_sync: {
-        Args: { p_branch: string; p_project_id: string }
-        Returns: undefined
-      }
+      request_sync: { Args: { p_project_id: string }; Returns: undefined }
       start_requested_sync: {
         Args: { p_project_id: string }
         Returns: undefined

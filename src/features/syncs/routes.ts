@@ -67,7 +67,7 @@ export function isSignedByGitHub(body: Buffer, signature: string | undefined) {
 const Push = z.object({
   ref: z.string(),
   deleted: z.boolean().optional(),
-  repository: z.object({ id: z.number(), default_branch: z.string() }),
+  repository: z.object({ id: z.number() }),
 })
 
 registry.registerPath({
@@ -76,7 +76,7 @@ registry.registerPath({
   tags: ['syncs'],
   summary: 'Events from the GitHub App',
   description:
-    'Only GitHub calls it, signed with the webhook secret. A push to the default branch of a connected repository starts a sync, or one more after the sync that is running. Every other event is accepted and ignored.',
+    'Only GitHub calls it, signed with the webhook secret. A push to the branch a project reads starts a sync, or one more after the sync that is running. Every other event is accepted and ignored.',
   request: {
     headers: z.object({ 'x-github-event': z.string(), 'x-hub-signature-256': z.string() }),
     body: { required: true, content: { 'application/json': { schema: z.object({}).passthrough() } } },
@@ -94,10 +94,9 @@ webhooksRouter.post('/github', express.raw({ type: 'application/json', limit: '1
   }
   if (req.get('x-github-event') === 'push') {
     const push = Push.parse(JSON.parse(req.body.toString('utf8')))
-    // Only the default branch is synced, and a deleted branch has nothing to read.
-    if (!push.deleted && push.ref === `refs/heads/${push.repository.default_branch}`) {
-      if (await requestSync(String(push.repository.id), push.repository.default_branch)) wakeSyncWorker()
-    }
+    // Only a project's own branch is synced: never a tag, and a deleted branch has nothing to read.
+    const branch = push.ref.startsWith('refs/heads/') && !push.deleted ? push.ref.slice('refs/heads/'.length) : null
+    if (branch && (await requestSync(String(push.repository.id), branch))) wakeSyncWorker()
   }
   res.status(202).end()
 })

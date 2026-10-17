@@ -12,6 +12,7 @@ test('every projects route needs a session', async () => {
     fetch(`${base}/api/projects/${projectId}`),
     fetch(`${base}/api/projects/${projectId}`, { method: 'DELETE' }),
     fetch(`${base}/api/repositories`),
+    fetch(`${base}/api/repositories/42/branches`),
     // A stranger gets 401 before their body is even read.
     fetch(`${base}/api/projects`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }),
   ]
@@ -20,7 +21,9 @@ test('every projects route needs a session', async () => {
 
 test('docs list the projects routes', async () => {
   const { paths } = (await (await fetch(`${base}/api/openapi.json`)).json()) as { paths: Record<string, object> }
-  for (const path of ['/api/projects', '/api/projects/{projectId}', '/api/repositories']) assert.ok(paths[path], path)
+  for (const path of ['/api/projects', '/api/projects/{projectId}', '/api/repositories', '/api/repositories/{repositoryId}/branches']) {
+    assert.ok(paths[path], path)
+  }
   assert.ok('post' in (paths['/api/projects'] ?? {}))
   assert.ok('delete' in (paths['/api/projects/{projectId}'] ?? {}))
 })

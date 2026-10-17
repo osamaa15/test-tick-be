@@ -37,7 +37,7 @@ Without the CLI, a migration can also be pasted into the Supabase SQL editor. Th
 | --- | --- | --- |
 | `contact_messages` | Messages from the public contact page: name, email, topic, message | Step 1 |
 | `users` | One per person and provider account: name, handle, avatar, their own `role` (null until chosen) | Step 2 |
-| `projects` | Connected repositories: provider id, owner, name, visibility, default branch, who connected it, and `resync` (a push came while a sync ran; step 6) | Step 2 |
+| `projects` | Connected repositories: provider id, owner, name, visibility, `branch` (the one Testick reads, chosen when it was connected and never changed), who connected it, and `resync` (a push came while a sync ran; step 6) | Step 2 |
 | `syncs` | Every run that read a push: status, branch, commit, `failure` (only when failed), start and finish. Also the job queue: `claimed_at` and `attempts` (step 6) | Step 2 |
 | `features` | What syncs found in a project: name, one-sentence description, and (step 6) the `paths` that implement it with a `code_hash` of their contents, to tell when it changed | Step 2 |
 | `scenarios` | The test cases, per feature and role, with origin (`ai`, `edited`, `manual`) and the team's result (`verdict`, `marked_by`, `marked_at`), and who took it on the board (`assigned_to`, `assigned_at`, since the board) | Step 2 |
@@ -67,7 +67,7 @@ Called with `supabase.rpc(...)`. Each takes the person (`p_user_id`) and, where 
 ### How the API's ideas map to the tables
 
 - **Lead and visibility** are not stored. Both come from the provider (cached a minute): who can access the repository, and with what permission. See "GitHub access" in `docs/architecture.md`.
-- **A project's repository names** (`owner`, `name`, `visibility`, `default_branch`) are stored as they were when it was connected. The API answers with the provider's current values, which stay right after a rename.
+- **A project's repository names** (`owner`, `name`, `visibility`) are stored as they were when it was connected. The API answers with the provider's current values, which stay right after a rename. `branch` is the project's own: syncs, pushes and Sync now read only it, and nothing changes it.
 - **The current features** are the `sync_features` rows of the current sync. A feature a later sync no longer found keeps its rows for the history but drops off the project page.
 - **The current sync** is the project's newest `succeeded` sync. `latestSync` is its newest sync of any status. A unique index allows only one `running` sync per project.
 - **The result** is three columns on `scenarios`, one per scenario for the whole team. A check keeps `verdict` and `marked_at` set or cleared together. A sync that finds a feature changed clears them.

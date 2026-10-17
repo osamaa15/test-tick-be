@@ -87,6 +87,15 @@ export function accessibleRepositories(userId: string, { fresh = false } = {}) {
   return repositories
 }
 
+const Branches = z.array(z.object({ name: z.string() }))
+
+/** The names of a repository's branches, read from GitHub as the person. */
+export function branchesOf(userId: string, { owner, name }: Pick<AccessibleRepository, 'owner' | 'name'>) {
+  return asGitHubUser(userId, (token) =>
+    everyPage(`/repos/${owner}/${name}/branches`, token, (body) => Branches.parse(body).map((branch) => branch.name)),
+  )
+}
+
 /** The repository of a project the person can access, or a 404: the same answer as for a project that does not exist. */
 export async function repositoryOfProject(userId: string, projectId: string): Promise<AccessibleRepository> {
   const [{ data: project, error }, repositories] = await Promise.all([

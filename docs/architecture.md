@@ -68,7 +68,7 @@ Not built yet: revoking the GitHub token on disconnect (planned in Settings).
 
 ### Webhooks
 
-GitHub signs every delivery with `GITHUB_WEBHOOK_SECRET` (HMAC-SHA256 in `X-Hub-Signature-256`). An unsigned or wrongly signed body is a 401, checked in constant time before the body is parsed. A push to a connected repository's default branch calls `request_sync`; every other event is answered 202 and ignored.
+GitHub signs every delivery with `GITHUB_WEBHOOK_SECRET` (HMAC-SHA256 in `X-Hub-Signature-256`). An unsigned or wrongly signed body is a 401, checked in constant time before the body is parsed. A push to the branch a project reads (chosen when it was connected, never changed) calls `request_sync`; every other event is answered 202 and ignored.
 
 ## Syncs
 

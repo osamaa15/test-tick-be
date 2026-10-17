@@ -41,7 +41,10 @@ export const ScenariosByRole = z
 export const Project = z
   .object({
     id: z.uuid(),
-    repository: Repository.pick({ id: true, provider: true, owner: true, name: true, visibility: true, defaultBranch: true }),
+    repository: Repository.pick({ id: true, provider: true, owner: true, name: true, visibility: true }),
+    branch: z
+      .string()
+      .meta({ description: 'The branch Testick reads, chosen when the repository was connected. It never changes.' }),
     featureCount: z.number().int().meta({ description: '0 until the first sync has finished.' }),
     newFeatureCount: z
       .number()
@@ -76,11 +79,24 @@ export type ProjectDetail = z.infer<typeof ProjectDetail>
 
 export const ConnectInput = z
   .object({
-    repositoryIds: z
-      .array(z.string().trim().min(1).max(30))
+    repositories: z
+      .array(
+        z.object({
+          id: z.string().trim().min(1).max(30),
+          branch: z
+            .string()
+            .trim()
+            .min(1)
+            .max(255)
+            .meta({ description: 'The branch Testick reads. It cannot be changed after.' }),
+        }),
+      )
       .min(1, 'Choose at least one repository.')
       .max(100, 'Connect at most 100 repositories at a time.'),
   })
   .meta({ id: 'ConnectInput' })
+export type ConnectInput = z.infer<typeof ConnectInput>
+
+export const RepositoryParams = z.object({ repositoryId: z.string().trim().min(1).max(30) })
 
 export const ProjectParams = z.object({ projectId: z.uuid() })

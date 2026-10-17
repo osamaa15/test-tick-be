@@ -35,11 +35,11 @@ test('a webhook without the right signature is refused', async () => {
   assert.equal((await deliver('ping', { zen: 'hi' }, `sha256=${'0'.repeat(64)}`)).status, 401)
 })
 
-test('a signed webhook is accepted; a push to another branch starts nothing', async () => {
+test('a signed webhook is accepted; a tag or a deleted branch starts nothing', async () => {
   assert.equal((await deliver('ping', { zen: 'hi' })).status, 202)
-  const push = { ref: 'refs/heads/feature-x', repository: { id: 1, default_branch: 'main' } }
   // The test database is not reachable, so reaching it would answer 500.
-  assert.equal((await deliver('push', push)).status, 202)
+  assert.equal((await deliver('push', { ref: 'refs/tags/v1', repository: { id: 1 } })).status, 202)
+  assert.equal((await deliver('push', { ref: 'refs/heads/main', deleted: true, repository: { id: 1 } })).status, 202)
 })
 
 test('only source and docs are read, never dependencies, builds, media or big files', () => {

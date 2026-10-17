@@ -3,8 +3,8 @@ import { z } from 'zod'
 import { errorResponses, registry, sessionCookie } from '../../lib/openapi.js'
 import { limitRequests } from '../../lib/rateLimit.js'
 import { requireSession } from '../auth/session.js'
-import { ConnectInput, Project, ProjectDetail, ProjectParams, Repository } from './schemas.js'
-import { connectRepositories, getProject, listProjects, listRepositories, removeProject } from './service.js'
+import { ConnectInput, Project, ProjectDetail, ProjectParams, Repository, RepositoryParams } from './schemas.js'
+import { connectRepositories, getProject, listBranches, listProjects, listRepositories, removeProject } from './service.js'
 
 export const projectsRouter = Router()
 
@@ -86,12 +86,32 @@ projectsRouter.get('/repositories', limitRequests(60, 15), async (req, res) => {
 })
 
 registry.registerPath({
+  method: 'get',
+  path: '/api/repositories/{repositoryId}/branches',
+  tags: ['projects'],
+  summary: "A repository's branches",
+  description:
+    'The names of its branches, its default branch first, to choose the one Testick reads when connecting it. Asks GitHub each time, so it is limited to 60 requests per 15 minutes per caller.',
+  security,
+  request: { params: RepositoryParams },
+  responses: {
+    200: { description: 'The branch names.', content: { 'application/json': { schema: z.array(z.string()) } } },
+    ...errorResponses(400, 401, 404, 429),
+  },
+})
+
+projectsRouter.get('/repositories/:repositoryId/branches', limitRequests(60, 15), async (req, res) => {
+  const { user } = await requireSession(req)
+  res.json(await listBranches(user.id, RepositoryParams.parse(req.params).repositoryId))
+})
+
+registry.registerPath({
   method: 'post',
   path: '/api/projects',
   tags: ['projects'],
   summary: 'Connect repositories as projects',
   description:
-    'Each one starts its first sync, which stays `running` until it ends. One already connected is returned as it is. A repository the person cannot access is a 404, and then nothing is connected. Limited to 30 requests per 15 minutes per caller.',
+    'Each one reads the branch chosen for it, which never changes after, and starts its first sync, which stays `running` until it ends. One already connected is returned as it is, with its own branch. A repository the person cannot access is a 404, and a branch it does not have is a 400; then nothing is connected. Limited to 30 requests per 15 minutes per caller.',
   security,
   request: { body: { required: true, content: { 'application/json': { schema: ConnectInput } } } },
   responses: {
@@ -105,5 +125,5 @@ registry.registerPath({
 
 projectsRouter.post('/projects', limitRequests(30, 15), async (req, res) => {
   const { user } = await requireSession(req)
-  res.status(201).json(await connectRepositories(user.id, ConnectInput.parse(req.body).repositoryIds))
+  res.status(201).json(await connectRepositories(user.id, ConnectInput.parse(req.body).repositories))
 })

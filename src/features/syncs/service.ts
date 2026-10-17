@@ -6,10 +6,10 @@ import { SyncFeature, type Sync, type SyncHistory } from './schemas.js'
 
 const SyncFeatures = z.array(SyncFeature)
 
-/** Sync now: a sync of the project's default branch at its latest commit, as a push starts. One running is followed by another. */
+/** Sync now: a sync of the project's branch at its latest commit, as a push starts. One running is followed by another. */
 export async function syncNow(userId: string, projectId: string) {
-  const repository = await repositoryOfProject(userId, projectId)
-  const { error } = await supabase.rpc('request_sync', { p_project_id: projectId, p_branch: repository.defaultBranch })
+  await repositoryOfProject(userId, projectId)
+  const { error } = await supabase.rpc('request_sync', { p_project_id: projectId })
   if (error) throw error
 }
 
@@ -44,17 +44,17 @@ export async function getSyncHistory(userId: string, projectId: string): Promise
   }
 }
 
-/** A push to a connected repository's default branch. False when the repository is not a project. */
+/** A push to a branch. False when the repository is not a project, or the branch is not the one it reads. */
 export async function requestSync(repoId: string, branch: string): Promise<boolean> {
   const { data: project, error } = await supabase
     .from('projects')
-    .select('id')
+    .select('id, branch')
     .eq('provider', 'github')
     .eq('provider_repo_id', repoId)
     .maybeSingle()
   if (error) throw error
-  if (!project) return false
-  const requested = await supabase.rpc('request_sync', { p_project_id: project.id, p_branch: branch })
+  if (project?.branch !== branch) return false
+  const requested = await supabase.rpc('request_sync', { p_project_id: project.id })
   if (requested.error) throw requested.error
   return true
 }
