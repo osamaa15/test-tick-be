@@ -39,7 +39,7 @@ Stack: Node 22, Express 5, TypeScript, Zod 4 (validation and OpenAPI), Supabase 
 ## Commands
 
 - `npm run dev` starts the API at http://localhost:4000 and restarts on save. Swagger: http://localhost:4000/api/docs
-- `npm run check` runs lint, typecheck and tests (`check` skill)
+- `npm run check` runs lint, typecheck and tests (`check` skill). GitHub Actions runs it on every push to main and every pull request (`.github/workflows/check.yml`)
 - `npm run build` then `npm start` runs the compiled app, as in production
 - `npm run db:push` applies `supabase/migrations` to the linked project; `npm run db:types` regenerates `src/lib/database.types.ts`
 
