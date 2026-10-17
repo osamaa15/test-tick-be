@@ -60,17 +60,19 @@ export async function discoverFeatures(files: Map<string, string>, known: KnownF
 
 /**
  * Matches what the AI found to the known features by name. A feature is `added` when its name is new, and
- * `changed` when the code of its files is not what it was. Names are deduplicated and paths kept to real files.
+ * `changed` when the code of the files it had is not what it was, or it has no scenarios yet (no hash). It is
+ * compared over its old files because the AI lists a feature's files a little differently each time; it keeps
+ * the files listed now for the next sync. Names are deduplicated and paths kept to real files.
  */
 export function planFeatures(known: KnownFeature[], found: DiscoveredFeature[], files: Map<string, string>): PlannedFeature[] {
   const byName = new Map(known.map((feature) => [feature.name.toLowerCase(), feature]))
   const seen = new Set<string>()
+  const hash = (paths: string[]) => sha256(paths.map((path) => `${path}\0${files.get(path)}`).join('\0'))
   return found.flatMap((feature): PlannedFeature[] => {
     const name = feature.name.trim().slice(0, 200)
     if (!name || seen.has(name.toLowerCase()) || seen.size >= MAX_FEATURES) return []
     seen.add(name.toLowerCase())
     const paths = [...new Set(feature.paths)].filter((path) => files.has(path)).sort().slice(0, MAX_PATHS)
-    const codeHash = sha256(paths.map((path) => `${path}\0${files.get(path)}`).join('\0'))
     const match = byName.get(name.toLowerCase())
     return [
       {
@@ -78,8 +80,8 @@ export function planFeatures(known: KnownFeature[], found: DiscoveredFeature[], 
         name: match?.name ?? name,
         description: feature.description.trim().slice(0, 1000),
         paths,
-        code_hash: codeHash,
-        change: !match ? 'added' : match.code_hash === codeHash ? null : 'changed',
+        code_hash: hash(paths),
+        change: !match ? 'added' : match.code_hash === hash(match.paths) ? null : 'changed',
         scenarios: [],
       },
     ]

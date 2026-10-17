@@ -72,7 +72,7 @@ test('an archive becomes its code files by path, without its top folder or binar
   }
 })
 
-test('a feature is added when its name is new, changed when its code changed, untouched otherwise', () => {
+test('a feature is added when its name is new, changed when the code of its old files changed, untouched otherwise', () => {
   const files = new Map([
     ['src/login.ts', 'login v2'],
     ['src/cart.ts', 'cart'],
@@ -84,7 +84,8 @@ test('a feature is added when its name is new, changed when its code changed, un
     { id: 'f2', name: 'Checkout', description: 'old', paths: ['src/checkout.ts'], code_hash: hashOf('src/checkout.ts', 'v1') },
   ]
   const found = [
-    { name: 'sign in', description: 'Signs people in.', paths: ['src/login.ts', 'src/gone.ts'] },
+    // Listed with another file this time, but its own file did not change.
+    { name: 'sign in', description: 'Signs people in.', paths: ['src/login.ts', 'src/gone.ts', 'src/cart.ts'] },
     { name: 'Checkout', description: 'Takes payment.', paths: ['src/checkout.ts'] },
     { name: 'Cart', description: 'Holds items.', paths: ['src/cart.ts'] },
     { name: 'cart', description: 'Twice.', paths: [] },
@@ -94,7 +95,7 @@ test('a feature is added when its name is new, changed when its code changed, un
   assert.deepEqual(
     planned.map((feature) => [feature.id, feature.name, feature.change, feature.paths]),
     [
-      ['f1', 'Sign in', null, ['src/login.ts']],
+      ['f1', 'Sign in', null, ['src/cart.ts', 'src/login.ts']],
       ['f2', 'Checkout', 'changed', ['src/checkout.ts']],
       [null, 'Cart', 'added', ['src/cart.ts']],
     ],
