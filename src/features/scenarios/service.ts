@@ -1,4 +1,5 @@
 import type { Tables, TablesUpdate } from '../../lib/database.types.js'
+import { AiLimitError } from '../../lib/ai.js'
 import { HttpError } from '../../lib/errors.js'
 import { installationToken, readFiles } from '../../lib/githubApp.js'
 import { supabase } from '../../lib/supabase.js'
@@ -151,7 +152,9 @@ export async function regenerateScenarios(userId: string, featureId: string, rol
   const token = await installationToken(owner, name, id)
   const files = current.data.commit_sha ? await readFiles(token, owner, name, current.data.commit_sha, feature.paths) : []
   const existing = kept.data.map((scenario) => scenario.title)
-  const [written = []] = await writeScenarios([{ name: feature.name, description: feature.description, files, existing }], [role])
+  const [written = []] = await writeScenarios([{ name: feature.name, description: feature.description, files, existing }], [role]).catch((err: unknown) => {
+    throw err instanceof AiLimitError ? new HttpError(429, 'The AI has used up its requests for today. Try again tomorrow.') : err
+  })
 
   const replaced = await supabase.rpc('replace_ai_scenarios', {
     p_feature_id: featureId,

@@ -118,7 +118,7 @@ registry.registerPath({
   tags: ['scenarios'],
   summary: "Rewrite one role's AI scenarios",
   description:
-    "The AI rewrites the role's `ai` scenarios from the feature's code at the current sync; they get new ids and no result. `edited` and `manual` scenarios stay as they are. Takes up to a minute. It costs money, so it is limited to 20 requests an hour per caller.",
+    "The AI rewrites the role's `ai` scenarios from the feature's code at the current sync; they get new ids and no result. `edited` and `manual` scenarios stay as they are. Takes up to a minute. It costs money, so it is limited to 20 requests an hour per caller. Also 429 when the AI has used up its requests for today.",
   security,
   request: {
     params: FeatureIdParams,

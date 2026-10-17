@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { AiError } from '../../lib/ai.js'
+import { AiError, AiLimitError } from '../../lib/ai.js'
 import type { Tables } from '../../lib/database.types.js'
 import { GitHubError, gitHubGet } from '../../lib/github.js'
 import { installationToken } from '../../lib/githubApp.js'
@@ -149,8 +149,10 @@ async function runNextSync(): Promise<boolean> {
     const failure =
       err instanceof SyncFailure
         ? err.message
-        : err instanceof AiError
-          ? 'The AI could not read this push. The next push will try again.'
+        : err instanceof AiLimitError
+          ? 'The AI has used up its requests for today. The next push after it resets will try again.'
+          : err instanceof AiError
+            ? 'The AI could not read this push. The next push will try again.'
           : 'Something went wrong while syncing. The next push will try again.'
     const failed = await supabase.rpc('fail_sync', { p_sync_id: sync.id, p_attempt: sync.attempts, p_failure: failure })
     if (failed.error) log.error({ err: failed.error }, 'could not record the failure')

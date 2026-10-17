@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { afterEach, test } from 'node:test'
 import { z } from 'zod'
 import '../testServer.js'
-import { AiError, askAi } from './ai.js'
+import { AiError, AiLimitError, askAi } from './ai.js'
 
 const realFetch = globalThis.fetch
 afterEach(() => {
@@ -70,4 +70,23 @@ test('an answer that is cut off, not JSON, the wrong shape or refused is an AiEr
     provider(status, answer)
     await assert.rejects(ask(), AiError)
   }
+})
+
+// Last in this file: the models it uses up stay used up for an hour.
+test('a model out of requests for the day is skipped, and when all are, the AI fails at once without asking', async () => {
+  const models: unknown[] = []
+  const usedUp = () => new Response(JSON.stringify([{ error: { code: 429, details: [{ violations: [{ quotaId: 'GenerateRequestsPerDayPerProjectPerModel-FreeTier' }] }] } }]), { status: 429 })
+  const replies = [usedUp, () => new Response(JSON.stringify(choice('{"names": ["kiwi"]}'))), usedUp, usedUp]
+  globalThis.fetch = async (_url, init) => {
+    models.push(JSON.parse(String(init?.body)).model)
+    const reply = replies.shift()
+    if (!reply) throw new Error('asked too often')
+    return reply()
+  }
+  assert.deepEqual(await ask(), { names: ['kiwi'] })
+  const started = Date.now()
+  await assert.rejects(ask(), AiLimitError)
+  await assert.rejects(ask(), AiLimitError)
+  assert.ok(Date.now() - started < 1000, 'no waiting for a limit that lasts the day')
+  assert.deepEqual(models, ['gemini-3.6-flash', 'gemini-3.8-flash', 'gemini-3.8-flash', 'gemini-3-flash-preview'])
 })
